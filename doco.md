@@ -18,6 +18,8 @@
       - [`export-dotenv`](#export-dotenv)
     + [Automation](#automation)
       - [`compose`](#compose)
+    + [jq API](#jq-api)
+      - [`jqmd_data`](#jqmd_data)
   * [Commands](#commands)
     + [Docker-Compose Subcommands](#docker-compose-subcommands)
     + [Service Selection](#service-selection)
@@ -129,6 +131,9 @@ loco_loadproject() {
     $ echo 'services: {t: {image: alpine, command: "bash -c echo test"}}' >docker-compose.yml
     $ command doco dump
     {"services":{"t":{"command":"bash -c echo test","image":"alpine"}}}
+
+# Back to the test root
+    $ cd ..
 ~~~
 
 ## API
@@ -158,6 +163,36 @@ compose() {
 ~~~shell
     $ DOCO_OPTIONS=--tls DOCO_OVERRIDES='-f foo' compose bar baz
     docker-compose --tls --project-directory /*/doco.md -f /dev/fd/63 -f foo bar baz (glob)
+~~~
+
+### jq API
+
+#### `jqmd_data`
+
+The `jqmd_data` function is used to combine YAML or JSON blocks found in a project's configuration file.  Currently, it's defined as a recursive addition of dictionaries that also does addition of arrays.  This generally does the right thing to assemble docker-compose configuration, so long as you're consistent in using dictionaries or arrays for a given setting.
+
+```jq api
+def jqmd_data($other): . as $original |
+    reduce paths(type=="array") as $path (
+        (. // {}) * $other; setpath( $path; ($original | getpath($path)) + ($other | getpath($path)) )
+    );
+```
+
+~~~shell
+    $ RUN_JQ -n '{a: "b", c: {d: [1, 2]}} | jqmd_data( {c: {e: {f: "G"}, d: [27] }} )'
+    {
+      "a": "b",
+      "c": {
+        "d": [
+          1,
+          2,
+          27
+        ],
+        "e": {
+          "f": "G"
+        }
+      }
+    }
 ~~~
 
 ## Commands
@@ -233,12 +268,13 @@ doco.--()   { doco with '' "$@"; }
 
 ## Merging jqmd and loco
 
-We embed a copy of the jqmd source (so it doesn't have to be installed separately), and override the `mdsh-error` function to call `loco_error` so that all errors ultimately go through the same function.  Last, but not least, we directly concatenate the loco source so that it will act as the main program.
+We embed a copy of the jqmd source (so it doesn't have to be installed separately), pass along our jq API functions to jqmd, and override the `mdsh-error` function to call `loco_error` so that all errors ultimately go through the same function.  Last, but not least, we directly concatenate the loco source so that it will act as the main program:
 
 ```shell mdsh
 mdsh-embed jqmd
 ```
 ```shell
+DEFINE "$mdsh_raw_jq_api"
 mdsh-error() { printf -v REPLY "$1\n" "${@:2}"; loco_error "$REPLY"; }
 ```
 ```shell mdsh

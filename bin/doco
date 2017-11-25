@@ -40,6 +40,7 @@ loco_loadproject() {
 compose() {
     docker-compose ${DOCO_OPTIONS-} --project-directory "$LOCO_ROOT" -f <(echo "$DOCO_CONFIG") ${DOCO_OVERRIDES-} "$@"
 }
+mdsh_raw_jq_api+=($'def jqmd_data($other): . as $original |\n    reduce paths(type=="array") as $path (\n        (. // {}) * $other; setpath( $path; ($original | getpath($path)) + ($other | getpath($path)) )\n    );\n')
 DOCO_SERVICES=()
 loco_exec() { compose "$@" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}; }
 # Commands that don't accept a list of services
@@ -251,6 +252,7 @@ extract-between() { sed -ne '/'"$1"'/,/'"$2"'/ { s/\('"$1"'\)/'"${3-}"'/; s/'"$2
 # check bash-source and run main only if directly executing
 if [[ "$0" == "${BASH_SOURCE[0]}" ]]; then mdsh-main "$@"; exit $?; fi
 # --- EOF jqmd ---
+DEFINE "$mdsh_raw_jq_api"
 mdsh-error() { printf -v REPLY "$1\n" "${@:2}"; loco_error "$REPLY"; }
 #!/usr/bin/env bash
 

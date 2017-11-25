@@ -22,15 +22,16 @@ To create a new project, just make a file whose name ends in `.doco.md`, e.g.:
 
 In that file, you can intermix docker-compose YAML blocks, `jq` code, and shell script to define your configuration and custom commands, like so:
 
-```yaml !true
+```yaml
+version: "2.1"
 services:
   example1:
-    image: alpine
+    image: bash
 ```
 
 ```jq
 # jq filter that alters the supplied YAML
-.services.example1.command = "true"
+.services.example1.command = "bash -c 'echo hello world; echo'"
 ```
 
 ```shell
@@ -42,5 +43,7 @@ Your commands and containers can then be used on the command line:
 ~~~shell
     $ doco example
     this is an example command
+    $ doco run --rm example1
+    hello world
 ~~~
 
