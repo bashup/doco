@@ -5,3 +5,13 @@ dk use: entr-watch        # watch files and re-run tests or other commands
 dk use: shell-console     # make the "console" command enter a subshell
 
 # Define overrides, new commands, functions, etc. here:
+
+dk.bootstrap() {
+    for f in mdsh jqmd loco realpaths; do require $f basher install bashup/$f; done
+}
+
+dk.build() {
+    dk test && mdsh --out bin/doco --compile doco.md && chmod +x bin/doco;
+}
+
+cram.files() { ls doco.md; }
