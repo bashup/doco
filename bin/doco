@@ -16,3 +16,374 @@
 # MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
 # FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+loco_preconfig() {
+    LOCO_FILE=("*[-.]doco.md" ".doco" "docker-compose.yml")
+    LOCO_NAME=doco
+    LOCO_USER_CONFIG=$HOME/.config/doco
+    LOCO_SITE_CONFIG=/etc/doco/config
+}
+compose() {
+    docker-compose ${DOCO_OPTIONS-} --project-directory "$LOCO_ROOT" -f "$DOCO_CONFIG" ${DOCO_OVERRIDES-} "$@"
+}
+DOCO_SERVICES=()
+loco_exec() { compose "$@" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}; }
+# Commands that don't accept a list of services
+for cmd in bundle config down exec help port run scale version; do
+    eval "doco.$cmd() { compose $cmd \"\$@\"; }"
+done
+# Execute the rest of the command line with specified service(s)
+doco.with() { local DOCO_SERVICES=($1); doco "${@:2}"; }
+# Execute the rest of the command line with NO specified service(s)
+doco.--()   { doco with '' "$@"; }
+{ if [[ $OSTYPE != cygwin && $OSTYPE != msys && -e /dev/fd/0 ]]; then source /dev/fd/0; else source <(cat); fi; } <<'# --- EOF jqmd ---'
+#!/usr/bin/env bash
+# ---
+# This file was automatically generated from jqmd.md - DO NOT EDIT!
+# ---
+
+# Copyright (c) 2017 PJ Eby
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files
+# (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge,
+# publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do
+# so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+# MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE
+# FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+# WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+mdsh_raw_bash_runtime+=($'#!/usr/bin/env bash\n\n# --- BEGIN jqmd runtime ---\n')
+mdsh_raw_bash_runtime+=($'jqmd_imports=\njqmd_filters=\njqmd_defines=\n\nHAVE_FILTERS() { [[ ${jqmd_filters-} ]]; }\nCLEAR_FILTERS() { unset jqmd_filters; }\n\nIMPORTS() { jqmd_imports+="${jqmd_imports:+$\'\\n\'}$1"; }\nDEFINE()  { jqmd_defines+="${jqmd_defines:+$\'\\n\'}$1"; }\nFILTER()  { jqmd_filters+="${jqmd_filters:+|}$1"; }\n')
+mdsh_raw_bash_runtime+=($'JQOPTS=(jq)\nJQ_OPTS() { JQOPTS+=("$@"); }\nARG()     { JQ_OPTS --arg     "$1" "$2"; }\nARGJSON() { JQ_OPTS --argjson "$1" "$2"; }\n')
+mdsh_raw_bash_runtime+=($'RUN_JQ() {\n    local opt nargs cmd=(jq); set -- "${JQOPTS[@]:1}" "$@"\n\n    while (($#)); do\n        case "$1" in\n        -{f,-fromfile})                     nargs=2 ; FILTER "$(<"$2")" ;;\n        -{L,-indent})                       nargs=2 ;;\n        --{arg,arjgson,slurpfile,argfile})  nargs=3 ;;\n        --)  break   ;; # rest of args are data files\n        -*)  nargs=1 ;;\n        *)   FILTER "$1"; break ;; # jq program: data files follow\n        esac\n        cmd+=("${@:1:$nargs}")    # add $nargs args to cmd\n        shift $nargs\n    done\n\n    HAVE_FILTERS || FILTER .    # jq needs at least one filter expression\n\n    "${cmd[@]}" -f <(\n        printf "%s\\n" "${jqmd_imports-}" "${jqmd_defines-}" "${jqmd_filters-}"\n    ) "${@:2}"\n\n    CLEAR_FILTERS   # cleanup for any re-runs\n}\n')
+mdsh_raw_bash_runtime+=($'YAML()    { JSON "$(echo "$1" | yaml2json /dev/stdin)"; }\nJSON()    { FILTER "jqmd_data($1)"; }\n\ncommand -v yaml2json >/dev/null || yaml2json() {\n    python -c \'import sys, yaml, json; json.dump(yaml.safe_load(sys.stdin), sys.stdout, indent=4)\';\n}\n\n# --- END jqmd runtime ---\n')
+# Language Support
+mdsh-compile-jq()         { printf 'FILTER  %q\n' "$1"; }
+mdsh-compile-jq_defs()    { printf 'DEFINE  %q\n' "$1"; }
+mdsh-compile-jq_imports() { printf 'IMPORTS %q\n' "$1"; }
+
+mdsh-compile-yml()  { printf 'JSON %q\n' "$(echo "$1" | yaml2json /dev/stdin)"; }
+mdsh-compile-yaml() { printf 'JSON %q\n' "$(echo "$1" | yaml2json /dev/stdin)"; }
+mdsh-compile-json() { printf 'JSON %q\n' "$1"; }
+
+const() {
+    case "${tag_words-}" in
+    yaml|yml) printf "DEFINE %q\n" "def $1: $(echo "$block"|yaml2json /dev/stdin) ;" ;;
+    json)     printf "DEFINE %q\n" "def $1: $block ;" ;;
+    *) mdsh-error "Invalid language for constant: '%s'" "${tag_words-}"
+    esac
+}
+# Load the runtime so it's usable by mdsh
+printf -v REPLY '%s\n' "${mdsh_raw_bash_runtime[@]}"; eval "$REPLY"
+
+# Add runtime to the top of compiled scripts
+printf -v REPLY 'mdsh:file-header() { echo -n %q; }' "$REPLY"; eval "$REPLY"
+
+# Ensure scripts process any leftover filters at end
+mdsh:file-footer() { echo 'if [[ $0 == $BASH_SOURCE ]] && HAVE_FILTERS; then RUN_JQ; fi'; }
+set -euo pipefail  # Strict mode
+
+
+# read line from variable named by $1, reply in variable named by $2 (or REPLY)
+mdsh-read() {
+    [[ ${!1} && ${!1} =~ ^([^$'\n']*)($'\n'|$) ]] || return 1
+    printf -v "${2-REPLY}" %s "${BASH_REMATCH[1]}"
+    printf -v "$1"         %s "${!1#"$BASH_REMATCH"}"
+}
+mdsh-parse() {
+    local cmd=$1 lang block md=$2 ln indent fence close_fence indent_remove
+    local open_fence='^( {0,3})(~~~+|```+) *([^`]*)$'
+    while mdsh-read md ln; do
+        if [[ $ln =~ $open_fence ]]; then
+            indent=${BASH_REMATCH[1]} fence=${BASH_REMATCH[2]} lang=${BASH_REMATCH[3]} block=
+            close_fence="^( {0,3})$fence+ *\$" indent_remove="^${indent// / ?}"
+            while mdsh-read md ln && ! [[ $ln =~ $close_fence ]]; do
+                ! [[ $ln =~ $indent_remove ]] || ln=${ln#$BASH_REMATCH}; block+=$ln$'\n'
+            done
+            lang="${lang%"${lang##*[![:space:]]}"}"; $cmd fenced "$lang" "$block";
+        fi
+    done
+}
+mdsh-compile() (  # <-- force subshell to prevent escape of compile-time state
+    (($#)) && [[ $1 != '-' ]] && exec <"$1"  # take a file or stdin
+    REPLY=$(cat; echo -n _); mdsh-parse __COMPILE__ "${REPLY%_}"
+)
+__COMPILE__() {
+    [[ $1 == fenced && $fence == '```' && ! $indent ]] || return 0  # only unindented ``` code
+    local lang="${2//[^_[:alnum:]]/_}"; # convert language to safe variable/function name
+    local tag_words=($2);  # check for command blocks first
+    if [[ ${tag_words[1]-} == '!'* ]]; then
+        set -- "$3" "$2"; eval "${2#*!}"; return
+    elif [[ ${tag_words[1]-} == '|'* ]]; then
+        echo "${2#*|} <<'\`\`\`'"; printf '%s```\n' "$3"; return
+    elif fn-exists mdsh-lang-$lang; then
+        mdsh-rewrite mdsh-lang-$lang "{" "} <<'\`\`\`'"; printf '%s```\n' "$3"
+    elif fn-exists mdsh-compile-$lang; then
+        mdsh-compile-$lang "$3"
+    else
+        mdsh-misc "$2" "$3"
+    fi
+
+    if fn-exists mdsh-after-$lang; then
+        mdsh-rewrite mdsh-after-$lang
+    fi
+}
+# fn-exists: succeed if argument is a function
+fn-exists() { declare -F -- "$1"; } >/dev/null
+# Output body of func $1, optionally replacing the opening/closing { and } with $2 and $3
+mdsh-rewrite() {
+    declare -f $1 | sed -e '1d; 2s/^{ $/'"${2-"{"}"'/; $s/^}$/'"${3-"\}"}"'/'
+}
+mdsh-misc()          { mdsh-data "$@"; }    # Treat unknown languages as data
+mdsh-compile-()      { :; }                 # Ignore language-less blocks
+mdsh-compile-mdsh()  { eval "$1"; }         # Execute `mdsh` blocks in-line
+mdsh-compile-shell() { printf '%s' "$1"; }  # Copy `shell` blocks to the output
+mdsh-data() {
+    printf "mdsh_raw_${1//[^_[:alnum:]]/_}+=(%q)\n" "$2"
+}
+mdsh-compile-shell_mdsh() {
+    indent= fence='```' __COMPILE__ fenced mdsh "$1"
+}
+# Main program: check for arguments and run markdown script
+mdsh-main() {
+    (($#)) || mdsh-error "Usage: %s [--out FILE] [ --compile | --eval ] markdownfile [args...]" "${0#*/}"
+    case "$1" in
+    --) mdsh-interpret "${@:2}" ;;
+    --*|-?) fn-exists "mdsh.$1" || mdsh-error "%s: unrecognized option: %s" "${0#*/}" "$1"
+        "mdsh.$1" "${@:2}"
+        ;;
+    -??*) mdsh-main "${1::2}" "-${1:2}" "${@:2}" ;;  # split '-abc' into '-a -bc' and recurse
+    *)  mdsh-interpret "$@" ;;
+    esac
+}
+# Run markdown file as main program, with $0 == $BASH_SOURCE == "" and
+# MDSH_ZERO pointing to the original $0.
+
+function mdsh-interpret() {
+    printf -v cmd 'eval "$(%q --compile %q)"' "$0" "$1"
+    MDSH_ZERO="$1" exec bash -c "$cmd" "" "${@:2}"
+}
+mdsh.--compile() {
+    (($#)) || mdsh-error "Usage: %s --compile FILENAME..." "${0#*/}"
+    ! fn-exists mdsh:file-header || mdsh:file-header
+    for f; do MDSH_SOURCE=$f mdsh-compile "$f"; done
+    ! fn-exists mdsh:file-footer || mdsh:file-footer
+}
+
+mdsh.-c() { mdsh.--compile "$@"; }
+mdsh.--eval() {
+    (($# == 1)) && [[ $1 != - ]] ||
+        mdsh-error "Usage: %s --eval FILENAME" "${0#*/}"
+    mdsh.--compile "$1"
+    echo "__status=\$? eval 'return \$__status || exit \$__status' 2>/dev/null"
+}
+
+mdsh.-E() { mdsh.--eval "$@"; }
+mdsh.--out() {
+    if REPLY=("$(mdsh-main "${@:2}")"); then
+        echo "$REPLY" >"$1";
+    else exit $?;
+    fi
+}
+
+mdsh.-o() { mdsh.--out "$@"; }
+# mdsh-error: printf args to stderr and exit w/EX_USAGE (code 64)
+mdsh-error() { printf "$1\n" "${@:2}" >&2; exit 64; }
+mdsh.--help() {
+    printf "Usage: %s [--out FILE] [ --compile | --eval ] markdownfile [args...]\n" "${0#*/}"
+    echo -e '
+Run and/or compile code blocks from markdownfile(s) to bash.
+Use a filename of `-` to run or compile from stdin.
+
+Options:
+  -h, --help                Show this help message and exit
+  -c, --compile MDFILE...   Compile MDFILE(s) to bash and output on stdout.
+  -E, --eval MDFILE         Compile one file w/a shelldown-support footer line\n'
+}
+
+mdsh.-h() { mdsh.--help "$@"; }
+mdsh-embed() {
+    local f=$1 base=${1##*/}; local boundary="# --- EOF $base ---" contents ctr=
+    [[ $f == */* && -f $f ]] || f=$(command -v "$f") || {
+        echo "Can't find module $1" >&2; return 69  # EX_UNAVAILABLE
+    }
+    contents=$'\n'$(<"$f")$'\n'
+    while [[ $contents == *$'\n'"$boundary"$'\n'* ]]; do
+        let ctr++; boundary="# --- EOF $base.$ctr ---"
+    done
+    printf $'{ if [[ $OSTYPE != cygwin && $OSTYPE != msys && -e /dev/fd/0 ]]; then source /dev/fd/0; else source <(cat); fi; } <<\'%s\'%s%s\n' "$boundary" "$contents" "$boundary"
+}
+# run-markdown file args...
+# Compile `file` and source the result, passing along any positional arguments
+run-markdown() { source <(mdsh-compile <"$1") "${@:2}"; }
+# --- BEGIN DEPRECATED CODE ---
+markdown-to-shell() {
+    local arg cmd="$1" any='[^'"'"']\{1,\}'; local lang="${2:-$any}"
+
+    # Build up an "or" of languages, if more than one given
+    if (($#>2)); then printf -v lang '\|%q' "${@:3}"; lang="$2$lang"; fi
+    extract-markdown '\('"$lang"'\)' "$cmd"' <<'"'"'```'"' '\\2'" '```'
+}
+extract-markdown() { extract-between '^```'"$1"'$' '^```$' "${@:2}"; }
+extract-between() { sed -ne '/'"$1"'/,/'"$2"'/ { s/\('"$1"'\)/'"${3-}"'/; s/'"$2"'/'"${4-}"'/; p;}'; }
+# --- END DEPRECATED CODE ---
+
+# --- All functions have been defined, main script starts here! ---
+
+# check bash-source and run main only if directly executing
+if [[ "$0" == "${BASH_SOURCE[0]}" ]]; then mdsh-main "$@"; exit $?; fi
+# --- EOF jqmd ---
+mdsh-error() { printf -v REPLY "$1\n" "${@:2}"; loco_error "$REPLY"; }
+#!/usr/bin/env bash
+
+realpath.location() { realpath.follow "$1"; realpath.absolute "$REPLY" ".."; }
+realpath.resolved() { realpath.follow "$1"; realpath.absolute "$REPLY"; }
+realpath.dirname()  { if [[ $1 =~ /+[^/]+/*$ ]]; then REPLY="${1%${BASH_REMATCH}}"; REPLY=${REPLY:-/}; else REPLY=.; fi }
+realpath.basename() { if [[ $1 =~ /*([^/]+)/*$ ]]; then REPLY="${BASH_REMATCH[1]}"; else REPLY=/; fi }
+
+realpath.follow() {
+    local target
+    while [[ -L "$1" ]] && target=$(readlink -- "$1"); do
+        realpath.dirname "$1"
+        # Resolve symlink target relative to symlink's directory
+        [[ $REPLY != . && $target != /* ]] && REPLY=$REPLY/$target || REPLY=$target
+        # Break out if we found a symlink loop
+        for target; do [[ $REPLY == "$target" ]] && break 2; done
+        # Add current result to the loop-detect list and tail-recurse
+        set -- "$REPLY" "$@"
+    done
+    REPLY="$1"
+}
+
+realpath.absolute() {
+    REPLY=$PWD; local no_eg; shopt -q extglob || { no_eg=y; shopt -s extglob; }
+    while (($#)); do case $1 in
+        /*) REPLY=/; set -- "${1##+(/)}" "${@:2}" ;;
+        */*) set -- "${1%%/*}" "${1##${1%%/*}+(/)}" "${@:2}" ;;
+        ''|.) shift ;;
+        ..) realpath.dirname "$REPLY"; shift ;;
+        *) REPLY="${REPLY%/}/$1"; shift ;;
+    esac; done; ${no_eg:+shopt -u extglob}
+}
+
+realpath.canonical() {
+    local target=""
+    realpath.follow "$1"; set -- "$REPLY"   # $1 is now resolved
+    realpath.basename "$1"; target=$REPLY   # target = basename $1
+    realpath.dirname "$1";
+    [[ $REPLY != "$1" ]] && realpath.canonical "$REPLY"; # recurse unless root
+    realpath.absolute "$REPLY" "$target";   # combine canon parent w/basename
+}
+
+realpath.relative() {
+    local target=""
+    realpath.absolute "$1"; set -- "$REPLY" "${@:2}"; realpath.absolute "${2-$PWD}" X
+    while realpath.dirname "$REPLY"; [[ "$1" != "$REPLY" && "$1" == "${1#${REPLY%/}/}" ]]; do
+        target=../$target
+    done
+    [[ $1 == "$REPLY" ]] && REPLY=${target%/} || REPLY="$target${1#${REPLY%/}/}"
+    REPLY=${REPLY:-.}
+}
+
+#!/usr/bin/env bash
+
+# For documentation, see https://github.com/bashup/loco
+
+set -euo pipefail
+
+fn_exists() { declare -F -- "$1"; } >/dev/null
+fn_copy()   { REPLY="$(declare -f $1)"; eval "$2 ${REPLY#$1}"; }
+findup()    { walkup "${1:-$PWD}" reply_if_exists "${@:2}"; }
+
+reply_if_exists() {
+    local pat dir=$1 IFS= ; shift
+    for pat; do
+        for REPLY in ${dir%/}/$pat; do [[ -f "$REPLY" ]] && return 0; done
+    done
+    return 1
+}
+
+fn_exists realpath.absolute || source realpaths
+
+walkup() {
+    realpath.absolute "$1"
+    until set -- "$REPLY" "${@:2}"; "$2" "$1" "${@:3}"; do
+        [[ "$1" != "/" ]] || return 1; realpath.dirname "$1"
+    done
+}
+
+_loco_usage() { loco_error "Usage: $LOCO_COMMAND command args..."; }
+_loco_error() { echo "$@" >&2; exit 64; }
+_loco_cmd() { REPLY="$LOCO_NAME.$1"; }
+_loco_exec() { loco_error "Unrecognized command: $1"; }
+_loco_exists() { type -t "$1"; } >/dev/null
+
+_loco_do() {
+    [[ "${1-}" ]] || loco_usage   # No command given, exit w/usage
+    REPLY=""; loco_cmd "$1"; local cmd="$REPLY"
+    [[ "$cmd" ]] || loco_usage   # Unrecognized command, exit w/usage
+
+    if loco_exists "$cmd"; then
+        # Command, alias, function, or builtin exists
+        shift; "$cmd" "$@"
+    else
+        # Invoke the default command interpreter
+        loco_exec "$@"
+    fi
+}
+
+_loco_findproject() {
+    findup "$LOCO_PWD" "${LOCO_FILE[@]}" && LOCO_PROJECT=$REPLY ||
+        loco_error "Can't find $LOCO_FILE here";
+}
+_loco_preconfig() { true; }
+_loco_postconfig() { true; }
+_loco_findroot() { realpath.dirname "$LOCO_PROJECT"; LOCO_ROOT=$REPLY; }
+_loco_loadproject() { cd "$LOCO_ROOT";  $LOCO_LOAD "$1"; }
+_loco_site_config() { source "$1"; }
+_loco_user_config() { source "$1"; }
+
+
+# Find our configuration, exposing relevant paths and defaults
+
+_loco_config() {
+    LOCO_ARGS=("$@")
+    loco_preconfig "$@"
+    ${LOCO_COMMAND:+:} realpath.basename "$LOCO_SCRIPT"; LOCO_COMMAND="${LOCO_COMMAND-$REPLY}"
+    LOCO_NAME="${LOCO_NAME-${LOCO_COMMAND}}"
+    LOCO_PWD="${LOCO_PWD-$PWD}"
+
+    LOCO_SITE_CONFIG="${LOCO_SITE_CONFIG-/etc/$LOCO_NAME/config}"
+    [ -f "$LOCO_SITE_CONFIG" ] && loco_site_config "$LOCO_SITE_CONFIG"
+    LOCO_RC="${LOCO_RC-.${LOCO_NAME}rc}"
+    LOCO_USER_CONFIG="${LOCO_USER_CONFIG-$HOME/$LOCO_RC}"
+    [ -f "$LOCO_USER_CONFIG" ] && loco_user_config "$LOCO_USER_CONFIG"
+
+    [[ ${LOCO_FILE-} ]] || LOCO_FILE=(".$LOCO_NAME")
+    LOCO_LOAD="${LOCO_LOAD-source}"
+    loco_postconfig "$@"
+}
+
+_loco_main() {
+    loco_config "$@"
+    ${LOCO_PROJECT:+:} loco_findproject "$@"
+    ${LOCO_ROOT:+:}    loco_findroot "$@"
+    loco_loadproject "$LOCO_PROJECT"
+    fn_exists $LOCO_NAME || eval "$LOCO_NAME() { loco_do \"\$@\"; }"
+    loco_do "$@"
+}
+
+# Initialize default function implementations
+for f in $(compgen -A function _loco_); do
+    fn_exists "${f#_}" || fn_copy "$f" "${f#_}"
+done
+
+# Clear all LOCO_*  variables before beginning
+for lv in ${!LOCO_@}; do unset $lv; done
+
+LOCO_SCRIPT=$0
+if [[ $0 == "$BASH_SOURCE" ]]; then loco_main "$@"; fi
