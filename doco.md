@@ -57,10 +57,12 @@ And for our tests, we source this file and set up some testing tools:
     $ source doco; set +e
     $ doco.no-op() { :;}
 
+# Use README.md for default config
+    $ cp $TESTDIR/README.md readme.doco.md
+
 # Ignore/null out all configuration for testing
     $ loco_user_config() { :;}
     $ loco_site_config() { :;}
-    $ loco_findproject() { LOCO_PROJECT=/dev/null; DOCO_CONFIG=docker-compose.yml; }
     $ loco_main no-op
 
 # stub docker-compose to output arguments
@@ -94,6 +96,41 @@ loco_preconfig() {
 
 ### Project-Level Configuration
 
+Project configuration is loaded into the `DOCO_CONFIG` var as JSON text.  This may be done by reading it from `docker-compose.yml` or from the data and jq code embedded in a `*.doco.md` file.  If the project file is a `.doco` file, it's sourced and any jq filters in it are applied to the `docker-compose.yml`.
+
+```shell
+loco_loadproject() {
+    cd "$LOCO_ROOT"
+    case "$(basename "$1")" in
+    .doco)
+        source "$1"; DOCO_CONFIG="$(yaml2json - <docker-compose.yml | RUN_JQ)" ;;
+    *.doco.md)
+        (("$(ls *.doco.md | wc -l)" < 2)) || loco_error "Multiple doco.md files in $LOCO_ROOT"
+        set +x; run-markdown "$1";  DOCO_CONFIG="$(RUN_JQ -n)" ;;
+    *.yaml|*.yml)
+        DOCO_CONFIG="$(yaml2json - <"$1" | RUN_JQ)" ;;
+    *)
+        loco_error "Unrecognized project file type: $1" ;;
+    esac
+}
+```
+
+~~~shell
+# There can be only one! (.doco.md file, that is)
+    $ touch another.doco.md
+    $ command doco
+    Multiple doco.md files in /*/doco.md (glob)
+    [64]
+    $ rm another.doco.md
+
+# Config is loaded from .doco and docker-compose.yml if not otherwise found
+    $ mkdir t; cd t
+    $ echo 'doco.dump() { RUN_JQ -c . <(echo "$DOCO_CONFIG"); }' >.doco
+    $ echo 'services: {t: {image: alpine, command: "bash -c echo test"}}' >docker-compose.yml
+    $ command doco dump
+    {"services":{"t":{"command":"bash -c echo test","image":"alpine"}}}
+~~~
+
 ## API
 
 ### Declarations
@@ -114,13 +151,13 @@ loco_preconfig() {
 
 ```shell
 compose() {
-    docker-compose ${DOCO_OPTIONS-} --project-directory "$LOCO_ROOT" -f "$DOCO_CONFIG" ${DOCO_OVERRIDES-} "$@"
+    docker-compose ${DOCO_OPTIONS-} --project-directory "$LOCO_ROOT" -f <(echo "$DOCO_CONFIG") ${DOCO_OVERRIDES-} "$@"
 }
 ```
 
 ~~~shell
-    $ DOCO_OPTIONS=--tls DOCO_OVERRIDES='-f foo' DOCO_CONFIG=config.yml compose bar baz
-    docker-compose --tls --project-directory /dev -f config.yml -f foo bar baz
+    $ DOCO_OPTIONS=--tls DOCO_OVERRIDES='-f foo' compose bar baz
+    docker-compose --tls --project-directory /*/doco.md -f /dev/fd/63 -f foo bar baz (glob)
 ~~~
 
 ## Commands
@@ -136,7 +173,7 @@ loco_exec() { compose "$@" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}; }
 
 ~~~shell
     $ doco foo
-    docker-compose --project-directory /dev -f docker-compose.yml foo
+    docker-compose --project-directory /*/doco.md -f /dev/fd/63 foo (glob)
 ~~~
 
 But docker-compose subcommands that *don't* take services as their sole positional arguments don't get services appended:
@@ -155,7 +192,7 @@ done
         compose config "$@"
     }
     $ doco config
-    docker-compose --project-directory /dev -f docker-compose.yml config
+    docker-compose --project-directory /*/doco.md -f /dev/fd/63 config (glob)
 ~~~
 
 ### Service Selection
@@ -173,7 +210,7 @@ At first glance, this command might appear redundant to simply adding the servic
 
 ~~~shell
     $ doco with "a b c" ps
-    docker-compose --project-directory /dev -f docker-compose.yml ps a b c
+    docker-compose --project-directory /*/doco.md -f /dev/fd/63 ps a b c (glob)
 ~~~
 
 #### `--` *[subcommand args...]*
@@ -187,7 +224,7 @@ doco.--()   { doco with '' "$@"; }
 
 ~~~shell
     $ doco with "a b c" -- ps
-    docker-compose --project-directory /dev -f docker-compose.yml ps
+    docker-compose --project-directory /*/doco.md -f /dev/fd/63 ps (glob)
 ~~~
 
 ### Other

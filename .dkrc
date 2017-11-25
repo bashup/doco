@@ -15,4 +15,4 @@ dk.build() {
     dk test && mdsh --out bin/doco --compile doco.md && chmod +x bin/doco;
 }
 
-cram.files() { ls doco.md; }
+cram.files() { ls doco.md README.md; }

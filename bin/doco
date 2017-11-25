@@ -23,8 +23,22 @@ loco_preconfig() {
     LOCO_USER_CONFIG=$HOME/.config/doco
     LOCO_SITE_CONFIG=/etc/doco/config
 }
+loco_loadproject() {
+    cd "$LOCO_ROOT"
+    case "$(basename "$1")" in
+    .doco)
+        source "$1"; DOCO_CONFIG="$(yaml2json - <docker-compose.yml | RUN_JQ)" ;;
+    *.doco.md)
+        (("$(ls *.doco.md | wc -l)" < 2)) || loco_error "Multiple doco.md files in $LOCO_ROOT"
+        set +x; run-markdown "$1";  DOCO_CONFIG="$(RUN_JQ -n)" ;;
+    *.yaml|*.yml)
+        DOCO_CONFIG="$(yaml2json - <"$1" | RUN_JQ)" ;;
+    *)
+        loco_error "Unrecognized project file type: $1" ;;
+    esac
+}
 compose() {
-    docker-compose ${DOCO_OPTIONS-} --project-directory "$LOCO_ROOT" -f "$DOCO_CONFIG" ${DOCO_OVERRIDES-} "$@"
+    docker-compose ${DOCO_OPTIONS-} --project-directory "$LOCO_ROOT" -f <(echo "$DOCO_CONFIG") ${DOCO_OVERRIDES-} "$@"
 }
 DOCO_SERVICES=()
 loco_exec() { compose "$@" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}; }
