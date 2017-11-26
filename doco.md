@@ -19,6 +19,7 @@
       - [`export-dotenv` *filename*](#export-dotenv-filename)
     + [Automation](#automation)
       - [`compose`](#compose)
+      - [`project-name` *[service index]*](#project-name-service-index)
       - [`require-services` *flag command-name*](#require-services-flag-command-name)
     + [jq API](#jq-api)
       - [`jqmd_data`](#jqmd_data)
@@ -28,6 +29,9 @@
       - [Non-Service Subcommands](#non-service-subcommands)
       - [Single-Service Subcommands](#single-service-subcommands)
     + [Docker-Compose Options](#docker-compose-options)
+      - [Generic Options](#generic-options)
+      - [Aborting Options (--help, --version, etc.)](#aborting-options---help---version-etc)
+      - [Project-level Options](#project-level-options)
   * [Command-line Interface](#command-line-interface)
     + [doco options](#doco-options)
       - [`--with` *service [subcommand args...]*](#--with-service-subcommand-args)
@@ -286,6 +290,26 @@ compose() {
     docker-compose --tls --project-directory /*/doco.md -f /dev/fd/63 -f foo bar baz (glob)
 ~~~
 
+#### `project-name` *[service index]*
+
+Returns the project name or container name of the specified service in `REPLY`.  The project name is derived from  `$COMPOSE_PROJECT_NAME` (or the project directory name if not set).  If no *index* is given, it defaults to `1`.  (e.g. `project_service_1`).
+
+```shell
+project-name() {
+    REPLY=${COMPOSE_PROJECT_NAME-}
+    [[ $REPLY ]] || realpath.basename "$LOCO_ROOT"   # default to directory name
+    REPLY=${REPLY//[^[:alnum:]]/}; REPLY=${REPLY,,}  # lowercase and remove non-alphanumerics
+    ! (($#)) || REPLY+="_${1}_${2-1}"                # container name
+}
+```
+
+~~~shell
+    $ project-name; echo $REPLY
+    docomd
+    $ COMPOSE_PROJECT_NAME=foo project-name bar 3; echo $REPLY
+    foo_bar_3
+~~~
+
 #### `require-services` *flag command-name*
 
 Checks the number of currently selected services, based on *flag*.  If flag is `1`, then exactly one service must be selected; if `-`, then 0 or 1 services.  `+` means 1 or more services are required.  If the number of services selected (e.g. via the `--with` subcommand), does not match the requirement, abort with a usage error using *command-name*.
@@ -493,17 +517,18 @@ docker-compose-immediate -h --help -v --version
 
 #### Project-level Options
 
-Changing the project name keeps a record in `COMPOSE_PROJECT_NAME`, for ease of calculating container names.  The project directory, on the other hand, cannot be changed at all.
+Project level options are fixed and can't be changed via the command line.
 
 ```shell
-doco.-p() { COMPOSE_PROJECT_NAME="$1" doco opt -p opt "$@"; }
+doco.-p() { loco_error "You must use COMPOSE_PROJECT_NAME to set the project name."; }
 doco.--project-name() { doco -p "$@"; }
 doco.--project-directory() { loco_error "doco: --project-directory cannot be overridden"; }
 ```
 
 ~~~shell
-    $ doco -f x --verbose -p blah foo
-    docker-compose * -f x --verbose -p blah foo (glob)
+    $ (doco -f x --verbose -p blah foo)
+    You must use COMPOSE_PROJECT_NAME to set the project name.
+    [64]
 
     $ (doco --project-directory x blah)
     doco: --project-directory cannot be overridden
