@@ -39,6 +39,7 @@
       - [`--with-default` *alias [subcommand args...]*](#--with-default-alias-subcommand-args)
       - [`--require-services` *flag [subcommand args...]*](#--require-services-flag-subcommand-args)
     + [doco subcommands](#doco-subcommands)
+      - [`cp` *[opts] src dest*](#cp-opts-src-dest)
       - [`jq`](#jq)
       - [`sh`](#sh)
   * [Merging jqmd and loco](#merging-jqmd-and-loco)
@@ -127,6 +128,7 @@ loco_loadproject() {
     *)
         loco_error "Unrecognized project file type: $1" ;;
     esac
+    CLEAR_FILTERS  # doing RUN_JQ in a subshell doesn't reset the current shell's state
 }
 ```
 
@@ -140,9 +142,15 @@ loco_loadproject() {
 
 # Config is loaded from .doco and docker-compose.yml if not otherwise found
     $ mkdir t; cd t
-    $ echo 'doco.dump() { RUN_JQ -c . <(echo "$DOCO_CONFIG"); }' >.doco
+    $ echo 'FILTER .
+    > doco.dump() {
+    >     HAVE_FILTERS || echo "cleared!"
+    >     RUN_JQ -c . <(echo "$DOCO_CONFIG");
+    > }
+    > ' >.doco
     $ echo 'services: {t: {image: alpine, command: "bash -c echo test"}}' >docker-compose.yml
     $ command doco dump
+    cleared!
     {"services":{"t":{"command":"bash -c echo test","image":"alpine"}}}
 
 # .env file is auto-loaded
