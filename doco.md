@@ -22,15 +22,16 @@
       - [`require-services` *flag command-name*](#require-services-flag-command-name)
     + [jq API](#jq-api)
       - [`jqmd_data`](#jqmd_data)
-  * [Commands](#commands)
+  * [Commands and Options](#commands-and-options)
     + [Docker-Compose Subcommands](#docker-compose-subcommands)
       - [Multi-Service Subcommands](#multi-service-subcommands)
       - [Non-Service Subcommands](#non-service-subcommands)
       - [Single-Service Subcommands](#single-service-subcommands)
-    + [Service Selection](#service-selection)
-      - [`with` *service [subcommand args...]*](#with-service-subcommand-args)
+    + [Service Selection Options](#service-selection-options)
+      - [`--with` *service [subcommand args...]*](#--with-service-subcommand-args)
       - [`--` *[subcommand args...]*](#---subcommand-args)
-      - [`with-default` *alias [subcommand args...]*](#with-default-alias-subcommand-args)
+      - [`--with-default` *alias [subcommand args...]*](#--with-default-alias-subcommand-args)
+      - [`--require-services` *flag [subcommand args...]*](#--require-services-flag-subcommand-args)
     + [Other](#other)
       - [`jq`](#jq)
   * [Merging jqmd and loco](#merging-jqmd-and-loco)
@@ -165,7 +166,7 @@ ALIAS() {
         for svc in "${@:2}"; do
             [[ " ${!var-} " == *" $svc "* ]] || eval "doco_alias_$safe_alias+="'($svc)'
         done
-        printf -v tmp 'doco.%s() { doco with %q "$@"; }' "$alias" "${!var}"; eval "$tmp"
+        printf -v tmp 'doco.%s() { doco --with %q "$@"; }' "$alias" "${!var}"; eval "$tmp"
         var="doco_alias_$safe_alias[@]"
         printf -v tmp '| (.services.%s |= f ) ' "${!var}"
         DEFINE "def $alias(f): . $tmp;"
@@ -281,7 +282,7 @@ compose() {
 
 #### `require-services` *flag command-name*
 
-Checks the number of currently selected services, based on *flag*.  If flag is `1`, then exactly one service must be selected; if `-`, then 0 or 1 services.  `+` means 1 or more services are required.  If the number of services selected (e.g. via the `with` subcommand), does not match the requirement, abort with a usage error using *command-name*.
+Checks the number of currently selected services, based on *flag*.  If flag is `1`, then exactly one service must be selected; if `-`, then 0 or 1 services.  `+` means 1 or more services are required.  If the number of services selected (e.g. via the `--with` subcommand), does not match the requirement, abort with a usage error using *command-name*.
 
 ```shell
 require-services() {
@@ -300,28 +301,28 @@ require-services() {
     $ (doco -- test-rs 1)
     no services specified for test-rs
     [64]
-    $ (doco with "x y" test-rs 1)
+    $ (doco --with "x y" test-rs 1)
     test-rs cannot be used on multiple services
     [64]
-    $ (doco with foo test-rs 1)
+    $ (doco --with foo test-rs 1)
     success
 
 # - = at most one service
     $ (doco -- test-rs -)
     success
-    $ (doco with "x y" test-rs -)
+    $ (doco --with "x y" test-rs -)
     test-rs cannot be used on multiple services
     [64]
-    $ (doco with foo test-rs -)
+    $ (doco --with foo test-rs -)
     success
 
 # + = at least one service
     $ (doco -- test-rs +)
     no services specified for test-rs
     [64]
-    $ (doco with "x y" test-rs +)
+    $ (doco --with "x y" test-rs +)
     success
-    $ (doco with foo test-rs 1)
+    $ (doco --with foo test-rs 1)
     success
 ~~~
 
@@ -355,7 +356,7 @@ def jqmd_data($other): . as $original |
     }
 ~~~
 
-## Commands
+## Commands and Options
 
 ### Docker-Compose Subcommands
 
@@ -401,10 +402,10 @@ Commands that take exactly *one* service (exec, run, and port) are modified to r
 Inserting the service argument at the appropriate place requires parsing the command's options, specifically those that take an argument.
 
 ~~~shell
-    $ doco with x port --protocol udp 53
+    $ doco --with x port --protocol udp 53
     docker-compose * port --protocol udp x 53 (glob)
 
-    $ doco with "x y z" run -e FOO=bar foo
+    $ doco --with "x y z" run -e FOO=bar foo
     docker-compose * run -e FOO=bar x foo (glob)
     docker-compose * run -e FOO=bar y foo (glob)
     docker-compose * run -e FOO=bar z foo (glob)
@@ -439,54 +440,53 @@ __compose_one() {
 }
 ```
 
-### Service Selection
+### Service Selection Options
 
-#### `with` *service [subcommand args...]*
+#### `--with` *service [subcommand args...]*
 
 The `with`  subcommand sets one or more services in `DOCO_SERVICES` and invokes the given `doco` subcommand with the given arguments.  The *service* argument is either a single service name or a string containing a space-separated list of service names.
 
 ```shell
 # Execute the rest of the command line with specified service(s)
-doco.with() { local DOCO_SERVICES=($1); doco "${@:2}"; }
+doco.--with() { local DOCO_SERVICES=($1); doco "${@:2}"; }
 ```
 
 At first glance, this command might appear redundant to simply adding the service names to the end of a regular command.  But since you can write custom subcommands that execute multiple docker commands, or that loop over `DOCO_SERVICES` to perform other operations (not to mention subcommands that invoke `with` with a preset list of services), it can come quite in handy.
 
 ~~~shell
-    $ doco with "a b c" ps
+    $ doco --with "a b c" ps
     docker-compose * ps a b c (glob)
 ~~~
 
 #### `--` *[subcommand args...]*
 
-`--` is short for `with` with an empty service list; it can be used to ensure a command is invoked for all (or no) services, even if a service set was previously selected:
+`--` is short for `--with ''`; it can be used to ensure a command is invoked for all (or no) services, even if a service set was previously selected:
 
 ```shell
 # Execute the rest of the command line with NO specified service(s)
-doco.--()   { doco with '' "$@"; }
+doco.--()   { doco --with '' "$@"; }
 ```
 
-
-
 ~~~shell
-    $ doco with "a b c" -- ps
+    $ doco --with "a b c" -- ps
     docker-compose * ps (glob)
 ~~~
 
-#### `with-default` *alias [subcommand args...]*
+#### `--with-default` *alias [subcommand args...]*
 
 If no services are selected, invoke *alias subcommand args...*; otherwise invoke *subcommand args...*.  *alias* must be a valid `doco` subcommand, normally a service or group alias created with `SERVICES` or `ALIAS`.
 
 ```shell
-doco.with-default() {
+doco.--with-default() {
     if ((${#DOCO_SERVICES[@]})); then doco "${@:2}"; else doco "$@"; fi
 }
 ```
 
 ~~~shell
-    $ doco -- with-default alfa ps
+    $ doco -- --with-default alfa ps
     docker-compose * ps alfa (glob)
-    $ doco foxtrot with-default alfa ps -q
+
+    $ doco foxtrot --with-default alfa ps -q
     docker-compose * ps -q foxtrot (glob)
 ~~~
 
