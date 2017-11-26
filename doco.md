@@ -327,6 +327,17 @@ doco.--()   { doco with '' "$@"; }
 
 #### `jq`
 
+`doco jq` *args...* pipes the docker-compose configuration to `jq` *args...* as JSON.  Any functions defined via jqmd's facilities  (`DEFINES`, `IMPORTS`, `jq defs` blocks, `const` blocks, etc.) will be available to the given jq expression, if any.  If no expression is given, `.` is used.
+
+```shell
+doco.jq() { echo "$DOCO_CONFIG" | RUN_JQ "$@"; }
+```
+
+~~~shell
+    $ doco jq .version
+    "2.1"
+~~~
+
 ## Merging jqmd and loco
 
 We embed a copy of the jqmd source (so it doesn't have to be installed separately), pass along our jq API functions to jqmd, and override the `mdsh-error` function to call `loco_error` so that all errors ultimately go through the same function.  Last, but not least, we directly concatenate the loco source so that it will act as the main program:
