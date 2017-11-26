@@ -12,10 +12,10 @@
     + [Project-Level Configuration](#project-level-configuration)
   * [API](#api)
     + [Declarations](#declarations)
-      - [`SERVICES`](#services)
-      - [`VERSION`](#version)
+      - [`SERVICES` *name...*](#services-name)
+      - [`VERSION` *docker-compose version*](#version-docker-compose-version)
     + [Config](#config)
-      - [`export-dotenv`](#export-dotenv)
+      - [`export-dotenv` *filename*](#export-dotenv-filename)
     + [Automation](#automation)
       - [`compose`](#compose)
     + [jq API](#jq-api)
@@ -102,7 +102,7 @@ Project configuration is loaded into the `DOCO_CONFIG` var as JSON text.  This m
 
 ```shell
 loco_loadproject() {
-    cd "$LOCO_ROOT"
+    cd "$LOCO_ROOT"; [[ ! -f .env ]] || export-dotenv .env
     case "$(basename "$1")" in
     .doco)
         source "$1"; DOCO_CONFIG="$(yaml2json - <docker-compose.yml | RUN_JQ)" ;;
@@ -131,6 +131,12 @@ loco_loadproject() {
     $ echo 'services: {t: {image: alpine, command: "bash -c echo test"}}' >docker-compose.yml
     $ command doco dump
     {"services":{"t":{"command":"bash -c echo test","image":"alpine"}}}
+
+# .env file is auto-loaded
+    $ echo "FOO=bazbar" >.env
+    $ echo 'doco.dump() { echo "$FOO"; }' >.doco
+    $ command doco dump
+    bazbar
 
 # Back to the test root
     $ cd ..
@@ -181,7 +187,27 @@ VERSION() { FILTER ".version=\"$1\""; }
 
 ### Config
 
-#### `export-dotenv`
+#### `export-dotenv` *filename*
+
+`source` the specified file, exporting any variables defined by it that didn't previously exist.  Used to load the [project-level configuration](#project-level-configuration), but can also be used to load additional environment files.  (Note: the environment files are in *shell* syntax (bash syntax to be precise), *not* docker-compose syntax.  Since docker-compose gives the exported environment precedence over the contents of  `.env` files, this approach effectively allows the use of shell syntax in `.env`.
+
+```shell
+export-dotenv() {
+    local before="" after=""
+    before="$(compgen -v)"; source "$@"; after="$(compgen -v)"
+    after="$(echo "$after" | grep -vxF -f <(echo "$before"))" || true
+    [[ -z "$after" ]] || export $after
+}
+```
+
+~~~shell
+    $ declare -p FOO 2>/dev/null || echo undefined
+    undefined
+    $ echo "FOO=bar" >dummy.env
+    $ export-dotenv dummy.env
+    $ declare -p FOO 2>/dev/null || echo undefined
+    declare -x FOO="bar"
+~~~
 
 ### Automation
 

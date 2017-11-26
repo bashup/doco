@@ -24,7 +24,7 @@ loco_preconfig() {
     LOCO_SITE_CONFIG=/etc/doco/config
 }
 loco_loadproject() {
-    cd "$LOCO_ROOT"
+    cd "$LOCO_ROOT"; [[ ! -f .env ]] || export-dotenv .env
     case "$(basename "$1")" in
     .doco)
         source "$1"; DOCO_CONFIG="$(yaml2json - <docker-compose.yml | RUN_JQ)" ;;
@@ -44,6 +44,12 @@ SERVICES() {
     done
 }
 VERSION() { FILTER ".version=\"$1\""; }
+export-dotenv() {
+    local before="" after=""
+    before="$(compgen -v)"; source "$@"; after="$(compgen -v)"
+    after="$(echo "$after" | grep -vxF -f <(echo "$before"))" || true
+    [[ -z "$after" ]] || export $after
+}
 compose() {
     docker-compose ${DOCO_OPTIONS-} --project-directory "$LOCO_ROOT" -f <(echo "$DOCO_CONFIG") ${DOCO_OVERRIDES-} "$@"
 }

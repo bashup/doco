@@ -50,3 +50,7 @@ Your commands and containers can then be used on the command line:
 
 Your project document can include as many `shell`, `yaml`, and `jq` blocks as you like.  `yaml` and `jq` blocks are processed in order, with the `yaml` being treated as if it were a jq filter assigning the contents of the block. The project document is processed using [jqmd](https://github.com/bashup/jqmd), so all of the languages and metaprogramming tricks of both jqmd and [mdsh](https://github.com/bashup/mdsh) are supported.  (You can define jq functions in `jq defs` blocks, for example, or generate code using `mdsh` blocks.)
 
+Of course, you won't want to put sensitive data directly in your project document.  So, just like with docker-compose, you can use an `.env` file.  The only difference is that when you use doco instead of docker-compose, your `.env` file can use full shell syntax, not just the restricted `key=unquoted-value` used by docker-compose.
+
+You're also not limited to just the contents of your main project document to do configuration.  The shell code embedded in your project document can use [export-dotenv](doco.md#export-dotenv-filename) to process additional `.env` files, or [run-markdown](https://github.com/bashup/mdsh#available-functions) to source other markdown documents with the same syntax.  This can be useful for projects that want to be extensible, where a user can define local extension documents alongside a main project document that's kept in revision control.
+
