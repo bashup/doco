@@ -37,6 +37,13 @@ loco_loadproject() {
         loco_error "Unrecognized project file type: $1" ;;
     esac
 }
+SERVICES() {
+    for svc in "$@"; do
+        DEFINE "def $svc(f): .services.$svc |= f;"
+        eval "doco.$svc() { doco with '$svc' \"\$@\"; }"
+    done
+}
+VERSION() { FILTER ".version=\"$1\""; }
 compose() {
     docker-compose ${DOCO_OPTIONS-} --project-directory "$LOCO_ROOT" -f <(echo "$DOCO_CONFIG") ${DOCO_OVERRIDES-} "$@"
 }

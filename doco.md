@@ -140,9 +140,44 @@ loco_loadproject() {
 
 ### Declarations
 
-#### `SERVICES`
+#### `SERVICES` *name...*
 
-#### `VERSION`
+Define subcommands and jq functions for the given service names.  `SERVICES foo bar` will create `foo` and `bar` commands that set the current service set (`DOCO_SERVICES`)  to that service, along with jq functions `foo()` and `bar()` that can be used to alter `.services.foo` and `.services.bar`, respectively.
+
+```shell
+SERVICES() {
+    for svc in "$@"; do
+        DEFINE "def $svc(f): .services.$svc |= f;"
+        eval "doco.$svc() { doco with '$svc' \"\$@\"; }"
+    done
+}
+```
+
+~~~shell
+    $ SERVICES alfa foxtrot
+
+# command alias sets the active service set
+    $ doco alfa ps
+    docker-compose --project-directory /*/doco.md -f /dev/fd/63 ps alfa (glob)
+
+# jq function makes modifications to the service entry
+    $ RUN_JQ -c -n '{} | foxtrot(.image = "test")'
+    {"services":{"foxtrot":{"image":"test"}}}
+~~~
+
+#### `VERSION` *docker-compose version*
+
+Set the version of the docker-compose configuration (by way of a jq filter):
+
+```shell
+VERSION() { FILTER ".version=\"$1\""; }
+```
+
+~~~shell
+    $ VERSION 2.1
+    $ echo '{}' | RUN_JQ -c
+    {"version":"2.1"}
+~~~
 
 ### Config
 

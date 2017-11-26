@@ -30,7 +30,7 @@ services:
 ```
 
 ```jq
-# jq filter that alters the supplied YAML
+# A jq filter that alters the supplied YAML
 .services.example1.command = "bash -c 'echo hello world; echo'"
 ```
 
@@ -43,7 +43,10 @@ Your commands and containers can then be used on the command line:
 ~~~shell
     $ doco example
     this is an example command
+
     $ doco run --rm example1
     hello world
 ~~~
+
+Your project document can include as many `shell`, `yaml`, and `jq` blocks as you like.  `yaml` and `jq` blocks are processed in order, with the `yaml` being treated as if it were a jq filter assigning the contents of the block. The project document is processed using [jqmd](https://github.com/bashup/jqmd), so all of the languages and metaprogramming tricks of both jqmd and [mdsh](https://github.com/bashup/mdsh) are supported.  (You can define jq functions in `jq defs` blocks, for example, or generate code using `mdsh` blocks.)
 
