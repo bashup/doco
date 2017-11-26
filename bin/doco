@@ -53,6 +53,13 @@ export-dotenv() {
 compose() {
     docker-compose ${DOCO_OPTIONS-} --project-directory "$LOCO_ROOT" -f <(echo "$DOCO_CONFIG") ${DOCO_OVERRIDES-} "$@"
 }
+require-services() {
+    case "$1${#DOCO_SERVICES[@]}" in
+    ?1|-0) return ;;  # 1 is always acceptable
+    ?0)    loco_error "no services specified for $2" ;;
+    [-1]*) loco_error "$2 cannot be used on multiple services" ;;
+    esac
+}
 mdsh_raw_jq_api+=($'def jqmd_data($other): . as $original |\n    reduce paths(type=="array") as $path (\n        (. // {}) * $other; setpath( $path; ($original | getpath($path)) + ($other | getpath($path)) )\n    );\n')
 DOCO_SERVICES=()
 loco_exec() { compose "$@" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}; }

@@ -18,10 +18,14 @@
       - [`export-dotenv` *filename*](#export-dotenv-filename)
     + [Automation](#automation)
       - [`compose`](#compose)
+      - [`require-services` *flag command-name*](#require-services-flag-command-name)
     + [jq API](#jq-api)
       - [`jqmd_data`](#jqmd_data)
   * [Commands](#commands)
     + [Docker-Compose Subcommands](#docker-compose-subcommands)
+      - [Multi-Service Subcommands](#multi-service-subcommands)
+      - [Non-Service Subcommands](#non-service-subcommands)
+      - [Single-Service Subcommands](#single-service-subcommands)
     + [Service Selection](#service-selection)
       - [`with` *service subcommand args...*](#with-service-subcommand-args)
       - [`--` *[subcommand args...]*](#---subcommand-args)
@@ -224,6 +228,52 @@ compose() {
 ~~~shell
     $ DOCO_OPTIONS=--tls DOCO_OVERRIDES='-f foo' compose bar baz
     docker-compose --tls --project-directory /*/doco.md -f /dev/fd/63 -f foo bar baz (glob)
+~~~
+
+#### `require-services` *flag command-name*
+
+Checks the number of currently selected services, based on *flag*.  If flag is `1`, then exactly one service must be selected; if `-`, then 0 or 1 services.  `+` means 1 or more services are required.  If the number of services selected (e.g. via the `with` subcommand), does not match the requirement, abort with a usage error using *command-name*.
+
+```shell
+require-services() {
+    case "$1${#DOCO_SERVICES[@]}" in
+    ?1|-0) return ;;  # 1 is always acceptable
+    ?0)    loco_error "no services specified for $2" ;;
+    [-1]*) loco_error "$2 cannot be used on multiple services" ;;
+    esac
+}
+```
+
+~~~shell
+    $ doco.test-rs() { require-services "$1" test-rs; echo success; }
+
+# 1 = exactly one service
+    $ (doco -- test-rs 1)
+    no services specified for test-rs
+    [64]
+    $ (doco with "x y" test-rs 1)
+    test-rs cannot be used on multiple services
+    [64]
+    $ (doco with foo test-rs 1)
+    success
+
+# - = at most one service
+    $ (doco -- test-rs -)
+    success
+    $ (doco with "x y" test-rs -)
+    test-rs cannot be used on multiple services
+    [64]
+    $ (doco with foo test-rs -)
+    success
+
+# + = at least one service
+    $ (doco -- test-rs +)
+    no services specified for test-rs
+    [64]
+    $ (doco with "x y" test-rs +)
+    success
+    $ (doco with foo test-rs 1)
+    success
 ~~~
 
 ### jq API
