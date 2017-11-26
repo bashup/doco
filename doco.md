@@ -27,8 +27,9 @@
       - [Non-Service Subcommands](#non-service-subcommands)
       - [Single-Service Subcommands](#single-service-subcommands)
     + [Service Selection](#service-selection)
-      - [`with` *service subcommand args...*](#with-service-subcommand-args)
+      - [`with` *service [subcommand args...]*](#with-service-subcommand-args)
       - [`--` *[subcommand args...]*](#---subcommand-args)
+      - [`with-default` *alias [subcommand args...]*](#with-default-alias-subcommand-args)
     + [Other](#other)
       - [`jq`](#jq)
   * [Merging jqmd and loco](#merging-jqmd-and-loco)
@@ -392,7 +393,7 @@ __compose_one() {
 
 ### Service Selection
 
-#### `with` *service subcommand args...*
+#### `with` *service [subcommand args...]*
 
 The `with`  subcommand sets one or more services in `DOCO_SERVICES` and invokes the given `doco` subcommand with the given arguments.  The *service* argument is either a single service name or a string containing a space-separated list of service names.
 
@@ -417,10 +418,31 @@ At first glance, this command might appear redundant to simply adding the servic
 doco.--()   { doco with '' "$@"; }
 ```
 
+
+
 ~~~shell
     $ doco with "a b c" -- ps
     docker-compose * ps (glob)
 ~~~
+
+#### `with-default` *alias [subcommand args...]*
+
+If no services are selected, invoke *alias subcommand args...*; otherwise invoke *subcommand args...*.  *alias* must be a valid `doco` subcommand, normally a service or group alias created with `SERVICES` or `ALIAS`.
+
+```shell
+doco.with-default() {
+    if ((${#DOCO_SERVICES[@]})); then doco "${@:2}"; else doco "$@"; fi
+}
+```
+
+~~~shell
+    $ doco -- with-default alfa ps
+    docker-compose * ps alfa (glob)
+    $ doco foxtrot with-default alfa ps -q
+    docker-compose * ps -q foxtrot (glob)
+~~~
+
+
 
 ### Other
 
