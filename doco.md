@@ -36,6 +36,7 @@
       - [`--require-services` *flag [subcommand args...]*](#--require-services-flag-subcommand-args)
     + [doco subcommands](#doco-subcommands)
       - [`jq`](#jq)
+      - [`sh`](#sh)
   * [Merging jqmd and loco](#merging-jqmd-and-loco)
 
 <!-- tocstop -->
@@ -550,6 +551,31 @@ doco.jq() { echo "$DOCO_CONFIG" | RUN_JQ "$@"; }
 ~~~shell
     $ doco jq .version
     "2.1"
+~~~
+
+#### `sh`
+
+`doco sh` *args...* executes `bash` *args* in the specified service's container.  If no service is specified, it defaults to the `shell-default` alias.  Multiple services are not allowed.
+
+```shell
+doco.sh() { doco --with-default shell-default --require-services 1 exec bash "$@"; }
+doco.shell-default() { doco "$@"; }   # no-op until/unless aliased
+```
+
+~~~shell
+    $ (doco sh)
+    no services specified for exec
+    [64]
+
+    $ (doco tango sh)
+    exec cannot be used on multiple services
+    [64]
+
+    $ doco alfa sh
+    docker-compose * exec alfa bash (glob)
+
+    $ (ALIAS shell-default foxtrot; doco sh -c 'echo foo')
+    docker-compose * exec foxtrot bash -c echo\ foo (glob)
 ~~~
 
 ## Merging jqmd and loco

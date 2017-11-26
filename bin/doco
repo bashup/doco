@@ -125,6 +125,8 @@ doco.--with-default() {
 }
 doco.--require-services() { require-services "${@:1:2}" && doco "${@:2}"; }
 doco.jq() { echo "$DOCO_CONFIG" | RUN_JQ "$@"; }
+doco.sh() { doco --with-default shell-default --require-services 1 exec bash "$@"; }
+doco.shell-default() { doco "$@"; }   # no-op until/unless aliased
 { if [[ $OSTYPE != cygwin && $OSTYPE != msys && -e /dev/fd/0 ]]; then source /dev/fd/0; else source <(cat); fi; } <<'# --- EOF jqmd ---'
 #!/usr/bin/env bash
 # ---
