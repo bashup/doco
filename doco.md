@@ -448,28 +448,66 @@ __compose_one() {
 
 ### Docker-Compose Options
 
-docker-compose global options are added to the `DOCO_OPTS` variable, where they will pass through to any subcommand.
+  A few (like `--version` and `--help`) need to exit immediately, and a few others need special handling:
+
+#### Generic Options
+
+Most docker-compose global options are added to the `DOCO_OPTS` variable, where they will pass through to any subcommand.
 
 ```shell
 docker-compose-options() {
     while (($#)); do
-        printf -v REPLY 'doco.%s() { local DOCO_OPTS="$DOCO_OPTS %s"; doco "$@"; }' "$1" "$1"; eval "$REPLY"; shift
+        printf -v REPLY 'doco.%s() { doco opt %s "$@"; }' "$1" "$1"; eval "$REPLY"; shift
     done
 }
 
 docker-compose-optargs() {
     while (($#)); do
-        eval "doco.$1() { printf -v REPLY '%s $1 %q' "'"$DOCO_OPTS" "$1"; local DOCO_OPTS=$REPLY; doco "${@:2}"; }'; shift
+        eval "doco.$1() { doco opt $1 opt \"\$@\"; }"; shift
     done
 }
+doco.opt() { local DOCO_OPTS="$DOCO_OPTS $1"; doco "${@:2}"; }
+docker-compose-options --verbose --no-ansi --tls --tlsverify --skip-hostname-check
+docker-compose-optargs -f --file -H --host --tlscacert --tlscert --tlskey
+```
 
-docker-compose-options -v --verbose --version --no-ansi --tls --tlsverify --skip-hostname-check
-docker-compose-optargs -f --file -p --project-name -H --host --tlscacert --tlscert --tlskey --project-directory
+~~~shell
+    $ doco -f x --verbose --tlskey blah foo
+    docker-compose * -f x --verbose --tlskey blah foo (glob)
+~~~
+
+#### Aborting Options (--help, --version, etc.)
+
+Some options pass directly the rest of the command line directly to docker-compose, ignoring any preceding options or prefix options:
+
+```shell
+docker-compose-immediate() {
+    while (($#)); do eval "doco.$1() { docker-compose $1 \"\$@\"; }"; shift; done
+}
+docker-compose-immediate -h --help -v --version
+```
+~~~shell
+    $ doco -f x --help --verbose something blah
+    docker-compose --help --verbose something blah
+~~~
+
+#### Project-level Options
+
+Changing the project name keeps a record in `COMPOSE_PROJECT_NAME`, for ease of calculating container names.  The project directory, on the other hand, cannot be changed at all.
+
+```shell
+doco.-p() { COMPOSE_PROJECT_NAME="$1" doco opt -p opt "$@"; }
+doco.--project-name() { doco -p "$@"; }
+doco.--project-directory() { loco_error "doco: --project-directory cannot be overridden"; }
 ```
 
 ~~~shell
     $ doco -f x --verbose -p blah foo
     docker-compose * -f x --verbose -p blah foo (glob)
+
+    $ (doco --project-directory x blah)
+    doco: --project-directory cannot be overridden
+    [64]
 ~~~
 
 ## Command-line Interface

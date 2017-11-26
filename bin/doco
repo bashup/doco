@@ -104,18 +104,25 @@ __compose_one() {
 }
 docker-compose-options() {
     while (($#)); do
-        printf -v REPLY 'doco.%s() { local DOCO_OPTS="$DOCO_OPTS %s"; doco "$@"; }' "$1" "$1"; eval "$REPLY"; shift
+        printf -v REPLY 'doco.%s() { doco opt %s "$@"; }' "$1" "$1"; eval "$REPLY"; shift
     done
 }
 
 docker-compose-optargs() {
     while (($#)); do
-        eval "doco.$1() { printf -v REPLY '%s $1 %q' "'"$DOCO_OPTS" "$1"; local DOCO_OPTS=$REPLY; doco "${@:2}"; }'; shift
+        eval "doco.$1() { doco opt $1 opt \"\$@\"; }"; shift
     done
 }
-
-docker-compose-options -v --verbose --version --no-ansi --tls --tlsverify --skip-hostname-check
-docker-compose-optargs -f --file -p --project-name -H --host --tlscacert --tlscert --tlskey --project-directory
+doco.opt() { local DOCO_OPTS="$DOCO_OPTS $1"; doco "${@:2}"; }
+docker-compose-options --verbose --no-ansi --tls --tlsverify --skip-hostname-check
+docker-compose-optargs -f --file -H --host --tlscacert --tlscert --tlskey
+docker-compose-immediate() {
+    while (($#)); do eval "doco.$1() { docker-compose $1 \"\$@\"; }"; shift; done
+}
+docker-compose-immediate -h --help -v --version
+doco.-p() { COMPOSE_PROJECT_NAME="$1" doco opt -p opt "$@"; }
+doco.--project-name() { doco -p "$@"; }
+doco.--project-directory() { loco_error "doco: --project-directory cannot be overridden"; }
 # Execute the rest of the command line with specified service(s)
 doco.--with() { local DOCO_SERVICES=($1); doco "${@:2}"; }
 # Execute the rest of the command line with NO specified service(s)
