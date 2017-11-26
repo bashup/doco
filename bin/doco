@@ -57,9 +57,32 @@ mdsh_raw_jq_api+=($'def jqmd_data($other): . as $original |\n    reduce paths(ty
 DOCO_SERVICES=()
 loco_exec() { compose "$@" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}; }
 # Commands that don't accept a list of services
-for cmd in bundle config down exec help port run scale version; do
+for cmd in bundle config down help scale version; do
     eval "doco.$cmd() { compose $cmd \"\$@\"; }"
 done
+doco.exec() { __compose_one exec -e --env -u --user --index -- "$@"; }
+doco.run()  { __compose_one run  -p --publish -v --volume -w --workdir -e --env -u --user --name --entrypoint -- "$@"; }
+doco.port() { __compose_one port --protocol --index -- "$@"; }
+
+__compose_one() {
+    local svc opts='' argv=("$1")
+
+    # Build up a list of options that take an argument
+    while shift && (($#)) && [[ $1 != '--' ]]; do opts+="<$1>"; done
+
+    # Parse the command line, skipping options' argument values
+    while shift && (($#)) && [[ $1 == -* ]]; do
+        # Treat '--' as end of options
+        if [[ $1 == -- ]]; then shift; break; fi
+        argv+=("$1"); if [[ $opts = *"<$1>"* ]]; then shift; argv+=("$1"); fi
+    done
+
+    if ((${#DOCO_SERVICES[@]})); then
+        for svc in "${DOCO_SERVICES[@]}"; do compose "${argv[@]}" "$svc" "$@"; done
+    else
+        compose "${argv[@]}" "$@"
+    fi
+}
 # Execute the rest of the command line with specified service(s)
 doco.with() { local DOCO_SERVICES=($1); doco "${@:2}"; }
 # Execute the rest of the command line with NO specified service(s)

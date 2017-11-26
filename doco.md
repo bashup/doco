@@ -164,7 +164,7 @@ SERVICES() {
 
 # command alias sets the active service set
     $ doco alfa ps
-    docker-compose --project-directory /*/doco.md -f /dev/fd/63 ps alfa (glob)
+    docker-compose * ps alfa (glob)
 
 # jq function makes modifications to the service entry
     $ RUN_JQ -c -n '{} | foxtrot(.image = "test")'
@@ -260,6 +260,8 @@ def jqmd_data($other): . as $original |
 
 ### Docker-Compose Subcommands
 
+#### Multi-Service Subcommands
+
 Unrecognized subcommands are sent to docker-compose, with the current service set appended to the command line.  (The service set is empty by default, causing docker-compose to apply commands to all services by default.)
 
 ```shell
@@ -269,14 +271,16 @@ loco_exec() { compose "$@" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}; }
 
 ~~~shell
     $ doco foo
-    docker-compose --project-directory /*/doco.md -f /dev/fd/63 foo (glob)
+    docker-compose * foo (glob)
 ~~~
+
+#### Non-Service Subcommands
 
 But docker-compose subcommands that *don't* take services as their sole positional arguments don't get services appended:
 
 ```shell
 # Commands that don't accept a list of services
-for cmd in bundle config down exec help port run scale version; do
+for cmd in bundle config down help scale version; do
     eval "doco.$cmd() { compose $cmd \"\$@\"; }"
 done
 ```
@@ -288,8 +292,53 @@ done
         compose config "$@"
     }
     $ doco config
-    docker-compose --project-directory /*/doco.md -f /dev/fd/63 config (glob)
+    docker-compose * config (glob)
 ~~~
+
+#### Single-Service Subcommands
+
+Commands that take exactly *one* service (exec, run, and port) are modified to run on multiple services or no services.  When there are no services in the service set, they take an explicit service positionally, just like with docker-compose.  Otherwise, the positional service argument is assumed to be missing, and the command is run once for each service in the current set.
+
+Inserting the service argument at the appropriate place requires parsing the command's options, specifically those that take an argument.
+
+~~~shell
+    $ doco with x port --protocol udp 53
+    docker-compose * port --protocol udp x 53 (glob)
+
+    $ doco with "x y z" run -e FOO=bar foo
+    docker-compose * run -e FOO=bar x foo (glob)
+    docker-compose * run -e FOO=bar y foo (glob)
+    docker-compose * run -e FOO=bar z foo (glob)
+
+    $ doco -- exec -- foo bar
+    docker-compose * exec foo bar (glob)
+~~~
+
+```shell
+doco.exec() { __compose_one exec -e --env -u --user --index -- "$@"; }
+doco.run()  { __compose_one run  -p --publish -v --volume -w --workdir -e --env -u --user --name --entrypoint -- "$@"; }
+doco.port() { __compose_one port --protocol --index -- "$@"; }
+
+__compose_one() {
+    local svc opts='' argv=("$1")
+
+    # Build up a list of options that take an argument
+    while shift && (($#)) && [[ $1 != '--' ]]; do opts+="<$1>"; done
+
+    # Parse the command line, skipping options' argument values
+    while shift && (($#)) && [[ $1 == -* ]]; do
+        # Treat '--' as end of options
+        if [[ $1 == -- ]]; then shift; break; fi
+        argv+=("$1"); if [[ $opts = *"<$1>"* ]]; then shift; argv+=("$1"); fi
+    done
+
+    if ((${#DOCO_SERVICES[@]})); then
+        for svc in "${DOCO_SERVICES[@]}"; do compose "${argv[@]}" "$svc" "$@"; done
+    else
+        compose "${argv[@]}" "$@"
+    fi
+}
+```
 
 ### Service Selection
 
@@ -306,7 +355,7 @@ At first glance, this command might appear redundant to simply adding the servic
 
 ~~~shell
     $ doco with "a b c" ps
-    docker-compose --project-directory /*/doco.md -f /dev/fd/63 ps a b c (glob)
+    docker-compose * ps a b c (glob)
 ~~~
 
 #### `--` *[subcommand args...]*
@@ -320,7 +369,7 @@ doco.--()   { doco with '' "$@"; }
 
 ~~~shell
     $ doco with "a b c" -- ps
-    docker-compose --project-directory /*/doco.md -f /dev/fd/63 ps (glob)
+    docker-compose * ps (glob)
 ~~~
 
 ### Other
