@@ -22,17 +22,19 @@
       - [`require-services` *flag command-name*](#require-services-flag-command-name)
     + [jq API](#jq-api)
       - [`jqmd_data`](#jqmd_data)
-  * [Commands and Options](#commands-and-options)
+  * [Docker-Compose Integration](#docker-compose-integration)
     + [Docker-Compose Subcommands](#docker-compose-subcommands)
       - [Multi-Service Subcommands](#multi-service-subcommands)
       - [Non-Service Subcommands](#non-service-subcommands)
       - [Single-Service Subcommands](#single-service-subcommands)
-    + [Service Selection Options](#service-selection-options)
+    + [Docker-Compose Options](#docker-compose-options)
+  * [Command-line Interface](#command-line-interface)
+    + [doco options](#doco-options)
       - [`--with` *service [subcommand args...]*](#--with-service-subcommand-args)
       - [`--` *[subcommand args...]*](#---subcommand-args)
       - [`--with-default` *alias [subcommand args...]*](#--with-default-alias-subcommand-args)
       - [`--require-services` *flag [subcommand args...]*](#--require-services-flag-subcommand-args)
-    + [Other](#other)
+    + [doco subcommands](#doco-subcommands)
       - [`jq`](#jq)
   * [Merging jqmd and loco](#merging-jqmd-and-loco)
 
@@ -356,7 +358,7 @@ def jqmd_data($other): . as $original |
     }
 ~~~
 
-## Commands and Options
+## Docker-Compose Integration
 
 ### Docker-Compose Subcommands
 
@@ -440,7 +442,9 @@ __compose_one() {
 }
 ```
 
-### Service Selection Options
+## Command-line Interface
+
+### doco options
 
 #### `--with` *service [subcommand args...]*
 
@@ -504,7 +508,7 @@ doco.--require-services() { require-services "${@:1:2}" && doco "${@:2}"; }
     [64]
 ~~~
 
-### Other
+### doco subcommands
 
 #### `jq`
 
