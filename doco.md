@@ -12,6 +12,7 @@
     + [Project-Level Configuration](#project-level-configuration)
   * [API](#api)
     + [Declarations](#declarations)
+      - [`ALIAS` *name(s) services...*](#alias-names-services)
       - [`SERVICES` *name...*](#services-name)
       - [`VERSION` *docker-compose version*](#version-docker-compose-version)
     + [Config](#config)
@@ -151,17 +152,64 @@ loco_loadproject() {
 
 ### Declarations
 
+#### `ALIAS` *name(s) services...*
+
+Add *services* to the named alias(es), defining or redefining subcommands and jq functions to map those aliases to their defined services.   Multiple aliases can be updated at once by passing them as a space-separated string in the first argument, e.g. `ALIAS "foo bar" baz spam` adds `baz` and `spam` to both the `foo` and `bar` aliases.
+
+```shell
+ALIAS() {
+    local alias svc var safe_alias tmp
+    (($#>1)) || loco_error "ALIAS requires at least two arguments"
+    for alias in $1; do
+        safe_alias=${alias//[^_[:alnum:]]/_}; var="doco_alias_$safe_alias[*]"
+        for svc in "${@:2}"; do
+            [[ " ${!var-} " == *" $svc "* ]] || eval "doco_alias_$safe_alias+="'($svc)'
+        done
+        printf -v tmp 'doco.%s() { doco with %q "$@"; }' "$alias" "${!var}"; eval "$tmp"
+        var="doco_alias_$safe_alias[@]"
+        printf -v tmp '| (.services.%s |= f ) ' "${!var}"
+        DEFINE "def $alias(f): . $tmp;"
+    done
+}
+```
+
+~~~shell
+# Arguments required
+
+    $ (ALIAS)
+    ALIAS requires at least two arguments
+    [64]
+
+# Alias one, non-existing name
+
+    $ ALIAS delta echo gamma
+    $ doco delta ps
+    docker-compose * ps echo gamma (glob)
+    $ RUN_JQ -c -n '{} | delta(.image = "test")'
+    {"services":{"echo":{"image":"test"},"gamma":{"image":"test"}}}
+
+# Add to multiple aliases, adding but not duplicating
+
+    $ ALIAS "tango delta" niner gamma
+    $ doco delta ps
+    docker-compose * ps echo gamma niner (glob)
+    $ RUN_JQ -c -n '{} | delta(.image = "test")'
+    {"services":{"echo":{"image":"test"},"gamma":{"image":"test"},"niner":{"image":"test"}}}
+
+    $ doco tango ps
+    docker-compose * ps niner gamma (glob)
+    $ RUN_JQ -c -n '{} | tango(.image = "test")'
+    {"services":{"niner":{"image":"test"},"gamma":{"image":"test"}}}
+~~~
+
 #### `SERVICES` *name...*
 
 Define subcommands and jq functions for the given service names.  `SERVICES foo bar` will create `foo` and `bar` commands that set the current service set (`DOCO_SERVICES`)  to that service, along with jq functions `foo()` and `bar()` that can be used to alter `.services.foo` and `.services.bar`, respectively.
 
+Note: this command is a shortcut for aliasing a service name to itself; if you alias o
+
 ```shell
-SERVICES() {
-    for svc in "$@"; do
-        DEFINE "def $svc(f): .services.$svc |= f;"
-        eval "doco.$svc() { doco with '$svc' \"\$@\"; }"
-    done
-}
+SERVICES() { for svc in "$@"; do ALIAS "$svc" "$svc"; done; }
 ```
 
 ~~~shell

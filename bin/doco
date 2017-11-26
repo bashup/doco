@@ -37,12 +37,21 @@ loco_loadproject() {
         loco_error "Unrecognized project file type: $1" ;;
     esac
 }
-SERVICES() {
-    for svc in "$@"; do
-        DEFINE "def $svc(f): .services.$svc |= f;"
-        eval "doco.$svc() { doco with '$svc' \"\$@\"; }"
+ALIAS() {
+    local alias svc var safe_alias tmp
+    (($#>1)) || loco_error "ALIAS requires at least two arguments"
+    for alias in $1; do
+        safe_alias=${alias//[^_[:alnum:]]/_}; var="doco_alias_$safe_alias[*]"
+        for svc in "${@:2}"; do
+            [[ " ${!var-} " == *" $svc "* ]] || eval "doco_alias_$safe_alias+="'($svc)'
+        done
+        printf -v tmp 'doco.%s() { doco with %q "$@"; }' "$alias" "${!var}"; eval "$tmp"
+        var="doco_alias_$safe_alias[@]"
+        printf -v tmp '| (.services.%s |= f ) ' "${!var}"
+        DEFINE "def $alias(f): . $tmp;"
     done
 }
+SERVICES() { for svc in "$@"; do ALIAS "$svc" "$svc"; done; }
 VERSION() { FILTER ".version=\"$1\""; }
 export-dotenv() {
     local before="" after=""
