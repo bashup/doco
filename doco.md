@@ -81,10 +81,9 @@ And for our tests, we source this file and set up some testing tools:
     $ loco_site_config() { :;}
     $ loco_main no-op
 
-# stub docker-compose to output arguments
-    $ docker-compose() {
-    >     { printf -v REPLY ' %q' "docker-compose" "$@"; echo "${REPLY# }"; } >&2;
-    > }
+# stub docker and docker-compose to output arguments
+    $ docker() { printf -v REPLY ' %q' "docker" "$@"; echo "${REPLY# }"; } >&2;
+    $ docker-compose() { printf -v REPLY ' %q' "docker-compose" "$@"; echo "${REPLY# }"; } >&2;
 ~~~
 
 ## Configuration
@@ -293,6 +292,8 @@ compose() {
 #### `project-name` *[service index]*
 
 Returns the project name or container name of the specified service in `REPLY`.  The project name is derived from  `$COMPOSE_PROJECT_NAME` (or the project directory name if not set).  If no *index* is given, it defaults to `1`.  (e.g. `project_service_1`).
+
+(Note: custom container names are **not** supported.)
 
 ```shell
 project-name() {
@@ -602,6 +603,84 @@ doco.--require-services() { require-services "${@:1:2}" && doco "${@:2}"; }
 ~~~
 
 ### doco subcommands
+
+#### `cp` *[opts] src dest*
+
+Copy a file in or out of a service container.  Functions the same as `docker cp`, except that instead of using a container name as a prefix, you can use either a service name or an empty string (meaning, the currently-selected service).  So, e.g. `doco cp :/foo bar` copies `/foo` from the current service to `bar`, while `doco cp baz spam:/thing` copies `baz` to `/thing` inside the `spam` service's first container.  If no service is selected and no service name is given, the `shell-default` alias is tried.
+
+```shell
+doco.cp() {
+    local opts= seen=
+    while (($#)); do
+        case "$1" in
+        -a|--archive|-L|--follow-link) opts+=" $1" ;;
+        --help|-h) docker help cp || true; return ;;
+        -*) loco_error "Unrecognized option $1; see 'docker help cp'" ;;
+        *) break ;;
+        esac
+        shift
+    done
+    (($# == 2)) || loco_error "cp requires two non-option arguments (src and dest)"
+    while (($#)); do
+        if [[ $1 == *:* ]]; then
+            [[ ! "$seen" ]] || loco_error "cp: only one argument may contain a :"
+            seen=yes
+            if [[ "${1%%:*}" ]]; then
+                project-name "${1%%:*}"; set -- "$REPLY:${1#*:}" "${@:2}"
+            elif ((${#DOCO_SERVICES[@]} == 1)); then
+                project-name "$DOCO_SERVICES"; set -- "$REPLY$1" "${@:2}"
+            else
+                doco --with-default shell-default --require-services 1 cp $opts "$@"; return $?
+            fi
+        fi
+        printf -v opts "%s %q" "$opts" "$1"; shift
+    done
+    [[ "$seen" ]] || loco_error "cp: either source or destination must contain a :"
+    docker cp $opts
+}
+```
+
+~~~shell
+# Nominal cases
+
+    $ doco cp -h
+    docker help cp
+
+    $ doco cp -L /foo bar:/baz
+    docker cp -L /foo docomd_bar_1:/baz
+
+    $ doco cp bar:/spam -
+    docker cp docomd_bar_1:/spam -
+
+    $ (doco cp :x y)
+    no services specified for cp
+    [64]
+
+    $ (ALIAS shell-default tango; doco cp :x y)
+    docker cp docomd_tango_1:x y
+
+# Bad usages
+
+    $ (doco --with "too many" cp foo :bar)
+    cp cannot be used on multiple services
+    [64]
+
+    $ (doco cp --nosuch)
+    Unrecognized option --nosuch; see 'docker help cp'
+    [64]
+
+    $ (doco cp foo bar baz)
+    cp requires two non-option arguments (src and dest)
+    [64]
+
+    $ (doco cp foo bar)
+    cp: either source or destination must contain a :
+    [64]
+
+    $ (doco cp foo:bar baz:spam)
+    cp: only one argument may contain a :
+    [64]
+~~~
 
 #### `jq`
 

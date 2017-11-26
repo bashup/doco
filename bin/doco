@@ -137,6 +137,35 @@ doco.--with-default() {
     if ((${#DOCO_SERVICES[@]})); then doco "${@:2}"; else doco "$@"; fi
 }
 doco.--require-services() { require-services "${@:1:2}" && doco "${@:2}"; }
+doco.cp() {
+    local opts= seen=
+    while (($#)); do
+        case "$1" in
+        -a|--archive|-L|--follow-link) opts+=" $1" ;;
+        --help|-h) docker help cp || true; return ;;
+        -*) loco_error "Unrecognized option $1; see 'docker help cp'" ;;
+        *) break ;;
+        esac
+        shift
+    done
+    (($# == 2)) || loco_error "cp requires two non-option arguments (src and dest)"
+    while (($#)); do
+        if [[ $1 == *:* ]]; then
+            [[ ! "$seen" ]] || loco_error "cp: only one argument may contain a :"
+            seen=yes
+            if [[ "${1%%:*}" ]]; then
+                project-name "${1%%:*}"; set -- "$REPLY:${1#*:}" "${@:2}"
+            elif ((${#DOCO_SERVICES[@]} == 1)); then
+                project-name "$DOCO_SERVICES"; set -- "$REPLY$1" "${@:2}"
+            else
+                doco --with-default shell-default --require-services 1 cp $opts "$@"; return $?
+            fi
+        fi
+        printf -v opts "%s %q" "$opts" "$1"; shift
+    done
+    [[ "$seen" ]] || loco_error "cp: either source or destination must contain a :"
+    docker cp $opts
+}
 doco.jq() { echo "$DOCO_CONFIG" | RUN_JQ "$@"; }
 doco.sh() { doco --with-default shell-default --require-services 1 exec bash "$@"; }
 doco.shell-default() { doco "$@"; }   # no-op until/unless aliased
