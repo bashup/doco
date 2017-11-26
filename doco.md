@@ -490,7 +490,19 @@ doco.--with-default() {
     docker-compose * ps -q foxtrot (glob)
 ~~~
 
+#### `--require-services` *flag [subcommand args...]*
 
+This is the command-line equivalent of calling `require-services` *flag subcommand* before invoking *subcommand args...*.  That is, it checks that the relevant number of services are present and exits with a usage error if not.
+
+```shell
+doco.--require-services() { require-services "${@:1:2}" && doco "${@:2}"; }
+```
+
+~~~shell
+    $ (doco -- --require-services 1 ps)
+    no services specified for ps
+    [64]
+~~~
 
 ### Other
 

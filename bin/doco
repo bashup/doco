@@ -106,6 +106,7 @@ doco.--()   { doco --with '' "$@"; }
 doco.--with-default() {
     if ((${#DOCO_SERVICES[@]})); then doco "${@:2}"; else doco "$@"; fi
 }
+doco.--require-services() { require-services "${@:1:2}" && doco "${@:2}"; }
 doco.jq() { echo "$DOCO_CONFIG" | RUN_JQ "$@"; }
 { if [[ $OSTYPE != cygwin && $OSTYPE != msys && -e /dev/fd/0 ]]; then source /dev/fd/0; else source <(cat); fi; } <<'# --- EOF jqmd ---'
 #!/usr/bin/env bash
