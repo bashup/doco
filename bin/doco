@@ -59,8 +59,11 @@ export-dotenv() {
     after="$(echo "$after" | grep -vxF -f <(echo "$before"))" || true
     [[ -z "$after" ]] || export $after
 }
+DOCO_PREFIX_OPTS=
+DOCO_OPTS=
+
 compose() {
-    docker-compose ${DOCO_OPTIONS-} --project-directory "$LOCO_ROOT" -f <(echo "$DOCO_CONFIG") ${DOCO_OVERRIDES-} "$@"
+    docker-compose ${DOCO_PREFIX_OPTS-} --project-directory "$LOCO_ROOT" -f <(echo "$DOCO_CONFIG") ${DOCO_OPTS-} "$@"
 }
 require-services() {
     case "$1${#DOCO_SERVICES[@]}" in
@@ -99,6 +102,20 @@ __compose_one() {
         compose "${argv[@]}" "$@"
     fi
 }
+docker-compose-options() {
+    while (($#)); do
+        printf -v REPLY 'doco.%s() { local DOCO_OPTS="$DOCO_OPTS %s"; doco "$@"; }' "$1" "$1"; eval "$REPLY"; shift
+    done
+}
+
+docker-compose-optargs() {
+    while (($#)); do
+        eval "doco.$1() { printf -v REPLY '%s $1 %q' "'"$DOCO_OPTS" "$1"; local DOCO_OPTS=$REPLY; doco "${@:2}"; }'; shift
+    done
+}
+
+docker-compose-options -v --verbose --version --no-ansi --tls --tlsverify --skip-hostname-check
+docker-compose-optargs -f --file -p --project-name -H --host --tlscacert --tlscert --tlskey --project-directory
 # Execute the rest of the command line with specified service(s)
 doco.--with() { local DOCO_SERVICES=($1); doco "${@:2}"; }
 # Execute the rest of the command line with NO specified service(s)

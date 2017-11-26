@@ -269,16 +269,19 @@ export-dotenv() {
 
 #### `compose`
 
-`compose` *args* is short for `docker-compose` *args*, except that the project directory and config files are set to the ones calculated by doco.  If `DOCO_OPTIONS` is set, it's added to the start of the command line, and if `DOCO_OVERRIDES` is set, it's inserted before *args* but after the generated options:
+`compose` *args* is short for `docker-compose` *args*, except that the project directory and config files are set to the ones calculated by doco.  If `DOCO_PREFIX_OPTS` is set, it's added to the start of the command line, and if `DOCO_OPTS` is set, it's inserted before *args* but after the generated options:
 
 ```shell
+DOCO_PREFIX_OPTS=
+DOCO_OPTS=
+
 compose() {
-    docker-compose ${DOCO_OPTIONS-} --project-directory "$LOCO_ROOT" -f <(echo "$DOCO_CONFIG") ${DOCO_OVERRIDES-} "$@"
+    docker-compose ${DOCO_PREFIX_OPTS-} --project-directory "$LOCO_ROOT" -f <(echo "$DOCO_CONFIG") ${DOCO_OPTS-} "$@"
 }
 ```
 
 ~~~shell
-    $ DOCO_OPTIONS=--tls DOCO_OVERRIDES='-f foo' compose bar baz
+    $ DOCO_PREFIX_OPTS=--tls DOCO_OPTS='-f foo' compose bar baz
     docker-compose --tls --project-directory /*/doco.md -f /dev/fd/63 -f foo bar baz (glob)
 ~~~
 
@@ -441,6 +444,32 @@ __compose_one() {
     fi
 }
 ```
+
+### Docker-Compose Options
+
+docker-compose global options are added to the `DOCO_OPTS` variable, where they will pass through to any subcommand.
+
+```shell
+docker-compose-options() {
+    while (($#)); do
+        printf -v REPLY 'doco.%s() { local DOCO_OPTS="$DOCO_OPTS %s"; doco "$@"; }' "$1" "$1"; eval "$REPLY"; shift
+    done
+}
+
+docker-compose-optargs() {
+    while (($#)); do
+        eval "doco.$1() { printf -v REPLY '%s $1 %q' "'"$DOCO_OPTS" "$1"; local DOCO_OPTS=$REPLY; doco "${@:2}"; }'; shift
+    done
+}
+
+docker-compose-options -v --verbose --version --no-ansi --tls --tlsverify --skip-hostname-check
+docker-compose-optargs -f --file -p --project-name -H --host --tlscacert --tlscert --tlskey --project-directory
+```
+
+~~~shell
+    $ doco -f x --verbose -p blah foo
+    docker-compose * -f x --verbose -p blah foo (glob)
+~~~
 
 ## Command-line Interface
 
