@@ -387,17 +387,17 @@ set-alias() {
     local t
     printf -v t ' %q' "${@:2}"
     printf -v t 'doco-alias-%s() { REPLY=(%s); }' "$1" "$t"; eval "$t";
-    printf -v t 'doco.%s() { get-alias %q; doco --with "${DOCO_SERVICES[*]-} ${REPLY[*]-}" "$@"; }' "$1" "$1"; eval "$t"
+    printf -v t 'doco.%s() { get-alias %q; doco --with "${REPLY[*]-}" "$@"; }' "$1" "$1"; eval "$t"
     printf -v t '| (.services.%s |= f ) ' "${@:2}"; DEFINE "def $1(f): . $t;"
 }
 ```
 
 ~~~shell
-    $ set-alias fiz bar; get-alias fiz; printf '%q\n' "${REPLY[@]}"
-    bar
     $ set-alias fiz bar baz; get-alias fiz; printf '%q\n' "${REPLY[@]}"
     bar
     baz
+    $ set-alias fiz bar; get-alias fiz; printf '%q\n' "${REPLY[@]}"
+    bar
 ~~~
 
 ### jq API
@@ -585,27 +585,29 @@ doco.--project-directory() { loco_error "doco: --project-directory cannot be ove
 
 #### `--with` *service [subcommand args...]*
 
-The `with`  subcommand sets one or more services in `DOCO_SERVICES` and invokes the given `doco` subcommand with the given arguments.  The *service* argument is either a single service name or a string containing a space-separated list of service names.
+The `with`  subcommand adds one or more services to the current service set and invokes  `doco` *subcommand args...*.  The *service* argument is either a single service name or a string containing a space-separated list of service names.  `--with` can be given more than once.  (To reset the service set to empty, use `--`.)
 
 ```shell
 # Execute the rest of the command line with specified service(s)
-doco.--with() { local DOCO_SERVICES=($1); doco "${@:2}"; }
+doco.--with() { local DOCO_SERVICES=(${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"} $1); doco "${@:2}"; }
 ```
 
 At first glance, this command might appear redundant to simply adding the service names to the end of a regular command.  But since you can write custom subcommands that execute multiple docker commands, or that loop over `DOCO_SERVICES` to perform other operations (not to mention subcommands that invoke `with` with a preset list of services), it can come quite in handy.
 
 ~~~shell
-    $ doco --with "a b c" ps
+    $ doco --with "a b" ps
+    docker-compose * ps a b (glob)
+    $ doco --with "a b" --with c ps
     docker-compose * ps a b c (glob)
 ~~~
 
 #### `--` *[subcommand args...]*
 
-`--` is short for `--with ''`; it can be used to ensure a command is invoked for all (or no) services, even if a service set was previously selected:
+Reset the active service set to empty.  This can be used to ensure a command is invoked for all (or no) services, even if a service set was previously selected:
 
 ```shell
 # Execute the rest of the command line with NO specified service(s)
-doco.--()   { doco --with '' "$@"; }
+doco.--()   { local DOCO_SERVICES=(); doco "$@"; }
 ```
 
 ~~~shell
