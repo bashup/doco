@@ -39,16 +39,17 @@ loco_loadproject() {
     CLEAR_FILTERS  # doing RUN_JQ in a subshell doesn't reset the current shell's state
 }
 ALIAS() {
-    local alias svc var safe_alias tmp
+    local alias svc tmp
     (($#>1)) || loco_error "ALIAS requires at least two arguments"
     for alias in $1; do
-        safe_alias=${alias//[^_[:alnum:]]/_}; var="doco_alias_$safe_alias[*]"
+        get-alias "$alias"
         for svc in "${@:2}"; do
-            [[ " ${!var-} " == *" $svc "* ]] || eval "doco_alias_$safe_alias+="'($svc)'
+            [[ " ${REPLY[*]-} " == *" $svc "* ]] || REPLY+=("$svc")
         done
-        printf -v tmp 'doco.%s() { doco --with %q "$@"; }' "$alias" "${!var}"; eval "$tmp"
-        var="doco_alias_$safe_alias[@]"
-        printf -v tmp '| (.services.%s |= f ) ' "${!var}"
+        printf -v tmp ' %q' "${REPLY[@]}"
+        printf -v tmp 'doco-alias-%s() { REPLY=(%s); }' "$alias" "$tmp"; eval "$tmp";
+        printf -v tmp 'doco.%s() { get-alias %q; doco --with "${REPLY[*]-}" "$@"; }' "$alias" "$alias"; eval "$tmp"
+        printf -v tmp '| (.services.%s |= f ) ' "${REPLY[@]}"
         DEFINE "def $alias(f): . $tmp;"
     done
 }
@@ -66,6 +67,7 @@ DOCO_OPTS=
 compose() {
     docker-compose ${DOCO_PREFIX_OPTS-} --project-directory "$LOCO_ROOT" -f <(echo "$DOCO_CONFIG") ${DOCO_OPTS-} "$@"
 }
+get-alias() { if fn-exists "doco-alias-$1"; then "doco-alias-$1"; else REPLY=(); fi; }
 project-name() {
     REPLY=${COMPOSE_PROJECT_NAME-}
     [[ $REPLY ]] || realpath.basename "$LOCO_ROOT"   # default to directory name

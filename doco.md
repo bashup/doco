@@ -19,6 +19,7 @@
       - [`export-dotenv` *filename*](#export-dotenv-filename)
     + [Automation](#automation)
       - [`compose`](#compose)
+      - [`get-alias` *alias*](#get-alias-alias)
       - [`project-name` *[service index]*](#project-name-service-index)
       - [`require-services` *flag command-name*](#require-services-flag-command-name)
     + [jq API](#jq-api)
@@ -173,16 +174,17 @@ Add *services* to the named alias(es), defining or redefining subcommands and jq
 
 ```shell
 ALIAS() {
-    local alias svc var safe_alias tmp
+    local alias svc tmp
     (($#>1)) || loco_error "ALIAS requires at least two arguments"
     for alias in $1; do
-        safe_alias=${alias//[^_[:alnum:]]/_}; var="doco_alias_$safe_alias[*]"
+        get-alias "$alias"
         for svc in "${@:2}"; do
-            [[ " ${!var-} " == *" $svc "* ]] || eval "doco_alias_$safe_alias+="'($svc)'
+            [[ " ${REPLY[*]-} " == *" $svc "* ]] || REPLY+=("$svc")
         done
-        printf -v tmp 'doco.%s() { doco --with %q "$@"; }' "$alias" "${!var}"; eval "$tmp"
-        var="doco_alias_$safe_alias[@]"
-        printf -v tmp '| (.services.%s |= f ) ' "${!var}"
+        printf -v tmp ' %q' "${REPLY[@]}"
+        printf -v tmp 'doco-alias-%s() { REPLY=(%s); }' "$alias" "$tmp"; eval "$tmp";
+        printf -v tmp 'doco.%s() { get-alias %q; doco --with "${REPLY[*]-}" "$@"; }' "$alias" "$alias"; eval "$tmp"
+        printf -v tmp '| (.services.%s |= f ) ' "${REPLY[@]}"
         DEFINE "def $alias(f): . $tmp;"
     done
 }
@@ -295,6 +297,22 @@ compose() {
 ~~~shell
     $ DOCO_PREFIX_OPTS=--tls DOCO_OPTS='-f foo' compose bar baz
     docker-compose --tls --project-directory /*/doco.md -f /dev/fd/63 -f foo bar baz (glob)
+~~~
+
+#### `get-alias` *alias*
+
+Return the current value of alias *alias* as an array in `REPLY`.  Returns an empty array if the alias doesn't exist.
+
+```shell
+get-alias() { if fn-exists "doco-alias-$1"; then "doco-alias-$1"; else REPLY=(); fi; }
+```
+
+~~~shell
+    $ get-alias tango; printf '%q\n' ${REPLY[@]}
+    niner
+    gamma
+    $ get-alias nonesuch; echo ${#REPLY[@]}
+    0
 ~~~
 
 #### `project-name` *[service index]*
