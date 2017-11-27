@@ -23,6 +23,8 @@
       - [`project-name` *[service index]*](#project-name-service-index)
       - [`require-services` *flag command-name*](#require-services-flag-command-name)
       - [`set-alias` *alias services...*](#set-alias-alias-services)
+      - [`with-alias` *alias command...*](#with-alias-alias-command)
+      - [`with-service` *service(s) command...*](#with-service-services-command)
     + [jq API](#jq-api)
       - [`jqmd_data`](#jqmd_data)
   * [Docker-Compose Integration](#docker-compose-integration)
@@ -387,7 +389,7 @@ set-alias() {
     local t
     printf -v t ' %q' "${@:2}"
     printf -v t 'doco-alias-%s() { REPLY=(%s); }' "$1" "$t"; eval "$t";
-    printf -v t 'doco.%s() { get-alias %q; doco --with "${REPLY[*]-}" "$@"; }' "$1" "$1"; eval "$t"
+    printf -v t 'doco.%s() { with-alias %q doco "$@"; }' "$1" "$1"; eval "$t"
     printf -v t '| (.services.%s |= f ) ' "${@:2}"; DEFINE "def $1(f): . $t;"
 }
 ```
@@ -399,6 +401,42 @@ set-alias() {
     $ set-alias fiz bar; get-alias fiz; printf '%q\n' "${REPLY[@]}"
     bar
 ~~~
+
+#### `with-alias` *alias command...*
+
+Run *command...* with the expansion of *alias* added to the current service set (without duplicating existing services).   (Note that *command* is a shell command, not a `doco` subcommand!)
+
+```shell
+with-alias() { get-alias "$1"; with-service "${REPLY[*]-}" "${@:2}"; }
+```
+
+~~~shell
+    $ with-alias fiz eval $'printf \'%q\n\' "${DOCO_SERVICES[@]}"'
+    bar
+~~~
+
+#### `with-service` *service(s) command...*
+
+Run command with *service(s)* added to the current service set (without duplicating existing services).  The first argument can be a space-separated list of service names.  (Note that *command* is a shell command, not a `doco` subcommand!)
+
+```shell
+with-service() {
+    local svc DOCO_SERVICES=(${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"})
+    for svc in $1; do
+        [[ " ${DOCO_SERVICES[*]-} " == *" $svc "* ]] || DOCO_SERVICES+=("$svc")
+    done
+    "${@:2}"
+}
+```
+
+~~~shell
+    $ with-service "foo bar" with-service "bar baz" eval $'printf \'%q\n\' "${DOCO_SERVICES[@]}"'
+    foo
+    bar
+    baz
+~~~
+
+
 
 ### jq API
 
@@ -589,7 +627,7 @@ The `with`  subcommand adds one or more services to the current service set and 
 
 ```shell
 # Execute the rest of the command line with specified service(s)
-doco.--with() { local DOCO_SERVICES=(${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"} $1); doco "${@:2}"; }
+doco.--with() { with-service "$1" doco "${@:2}"; }
 ```
 
 At first glance, this command might appear redundant to simply adding the service names to the end of a regular command.  But since you can write custom subcommands that execute multiple docker commands, or that loop over `DOCO_SERVICES` to perform other operations (not to mention subcommands that invoke `with` with a preset list of services), it can come quite in handy.

@@ -79,8 +79,16 @@ set-alias() {
     local t
     printf -v t ' %q' "${@:2}"
     printf -v t 'doco-alias-%s() { REPLY=(%s); }' "$1" "$t"; eval "$t";
-    printf -v t 'doco.%s() { get-alias %q; doco --with "${REPLY[*]-}" "$@"; }' "$1" "$1"; eval "$t"
+    printf -v t 'doco.%s() { with-alias %q doco "$@"; }' "$1" "$1"; eval "$t"
     printf -v t '| (.services.%s |= f ) ' "${@:2}"; DEFINE "def $1(f): . $t;"
+}
+with-alias() { get-alias "$1"; with-service "${REPLY[*]-}" "${@:2}"; }
+with-service() {
+    local svc DOCO_SERVICES=(${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"})
+    for svc in $1; do
+        [[ " ${DOCO_SERVICES[*]-} " == *" $svc "* ]] || DOCO_SERVICES+=("$svc")
+    done
+    "${@:2}"
 }
 mdsh_raw_jq_api+=($'def jqmd_data($other): . as $original |\n    reduce paths(type=="array") as $path (\n        (. // {}) * $other; setpath( $path; ($original | getpath($path)) + ($other | getpath($path)) )\n    );\n')
 DOCO_SERVICES=()
@@ -134,7 +142,7 @@ doco.-p() { loco_error "You must use COMPOSE_PROJECT_NAME to set the project nam
 doco.--project-name() { doco -p "$@"; }
 doco.--project-directory() { loco_error "doco: --project-directory cannot be overridden"; }
 # Execute the rest of the command line with specified service(s)
-doco.--with() { local DOCO_SERVICES=(${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"} $1); doco "${@:2}"; }
+doco.--with() { with-service "$1" doco "${@:2}"; }
 # Execute the rest of the command line with NO specified service(s)
 doco.--()   { local DOCO_SERVICES=(); doco "$@"; }
 doco.--with-default() {
