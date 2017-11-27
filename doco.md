@@ -18,6 +18,7 @@
     + [Config](#config)
       - [`export-dotenv` *filename*](#export-dotenv-filename)
     + [Automation](#automation)
+      - [`alias-exists` *name*](#alias-exists-name)
       - [`compose`](#compose)
       - [`get-alias` *alias*](#get-alias-alias)
       - [`project-name` *[service index]*](#project-name-service-index)
@@ -182,8 +183,7 @@ Add *targets* to the named alias(es), defining or redefining subcommands and jq 
 ALIAS() {
     local alias svc DOCO_SERVICES=()
     (($#>1)) || loco_error "ALIAS requires at least two arguments"
-    for svc in "${@:2}"; do fn-exists "doco-alias-$svc" || SERVICES "$svc"; done
-    for alias in $1; do __mkalias "$alias" "${@:2}"; done
+    SERVICES "${@:2}"; for alias in $1; do __mkalias "$alias" "${@:2}"; done
 }
 __mkalias() {
      if (($#)); then with-alias "$1" __mkalias "${@:2}"; return; fi
@@ -228,12 +228,12 @@ __mkalias() {
 
 #### `SERVICES` *name...*
 
-Define subcommands and jq functions for the given service names.  `SERVICES foo bar` will create `foo` and `bar` commands that set the current service set (`DOCO_SERVICES`)  to that service, along with jq functions `foo()` and `bar()` that can be used to alter `.services.foo` and `.services.bar`, respectively.
+Define subcommands and jq functions for the given service names.  `SERVICES foo bar` will create `foo` and `bar` commands that set the current service set (`DOCO_SERVICES`)  to that service, along with jq functions `foo()` and `bar()` that can be used to alter `.services.foo` and `.services.bar`, respectively.  If an alias of a given *name* is already defined, it is *not* redefined.
 
-Note: this command is a shortcut for aliasing a service name to itself; if you alias o
+(Note: this command is effectively a shortcut for aliasing a service name to itself if it doesn't already exist, i.e. `set-alias` *name name*.)
 
 ```shell
-SERVICES() { for svc in "$@"; do set-alias "$svc" "$svc"; done; }
+SERVICES() { for svc in "$@"; do alias-exists "$svc" || set-alias "$svc" "$svc"; done; }
 ```
 
 ~~~shell
@@ -288,6 +288,21 @@ export-dotenv() {
 
 ### Automation
 
+#### `alias-exists` *name*
+
+Return success if *name* has previously been defined as a service or alias.
+
+```shell
+alias-exists() { fn-exists "doco-alias-$1"; }
+```
+
+~~~shell
+    $ alias-exists nonesuch || echo nope
+    nope
+    $ (SERVICES nonesuch; alias-exists nonesuch && echo yep)
+    yep
+~~~
+
 #### `compose`
 
 `compose` *args* is short for `docker-compose` *args*, except that the project directory and config files are set to the ones calculated by doco.  If `DOCO_PREFIX_OPTS` is set, it's added to the start of the command line, and if `DOCO_OPTS` is set, it's inserted before *args* but after the generated options:
@@ -311,7 +326,7 @@ compose() {
 Return the current value of alias *alias* as an array in `REPLY`.  Returns an empty array if the alias doesn't exist.
 
 ```shell
-get-alias() { if fn-exists "doco-alias-$1"; then "doco-alias-$1"; else REPLY=(); fi; }
+get-alias() { REPLY=(); ! alias-exists "$1" || "doco-alias-$1"; }
 ```
 
 ~~~shell
@@ -401,7 +416,6 @@ Set the named *alias* to expand to the given list of services.  Similar to `ALIA
 set-alias() {
     local t=; (($#<2)) || printf -v t ' %q' "${@:2}"
     printf -v t 'doco-alias-%s() { REPLY=(%s); }' "$1" "$t"; eval "$t";
-    printf -v t 'doco.%s() { with-alias %q doco "$@"; }' "$1" "$1"; eval "$t"
     printf -v t '| (.services."%s" |= f ) ' "${@:2}"
     DEFINE "def ${1//[^_[:alnum:]]/_}(f): . $t;"  # jqmd function names have a limited charset
 }
@@ -487,16 +501,24 @@ def jqmd_data($other): . as $original |
 
 #### Multi-Service Subcommands
 
-Unrecognized subcommands are sent to docker-compose, with the current service set appended to the command line.  (The service set is empty by default, causing docker-compose to apply commands to all services by default.)
+Unrecognized subcommands are first checked to see if they're an alias.  If not, they're sent to docker-compose, with the current service set appended to the command line.  (The service set is empty by default, causing docker-compose to apply commands to all services by default.)
 
 ```shell
 DOCO_SERVICES=()
-loco_exec() { compose "$@" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}; }
+loco_exec() {
+    if alias-exists "$1"; then
+        with-alias "$1" doco "${@:2}";
+    else
+        compose "$@" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"};
+    fi
+}
 ```
 
 ~~~shell
     $ doco foo
     docker-compose * foo (glob)
+    $ (ALIAS foo bar; doco foo ps)
+    docker-compose * ps bar (glob)
 ~~~
 
 #### Non-Service Subcommands
@@ -668,7 +690,7 @@ doco.--()   { local DOCO_SERVICES=(); doco "$@"; }
 
 #### `--with-default` *alias [subcommand args...]*
 
-Invoke *subcommand args...*, adding *alias* to the current service set if the current set is empty.  *alias* can be nonexistent or empty, so you may wish to follow this option with `--require-services` to verify the new count.
+Invoke `doco` *subcommand args...*, adding *alias* to the current service set if the current set is empty.  *alias* can be nonexistent or empty, so you may wish to follow this option with `--require-services` to verify the new count.
 
 ```shell
 doco.--with-default() {

@@ -41,14 +41,13 @@ loco_loadproject() {
 ALIAS() {
     local alias svc DOCO_SERVICES=()
     (($#>1)) || loco_error "ALIAS requires at least two arguments"
-    for svc in "${@:2}"; do fn-exists "doco-alias-$svc" || SERVICES "$svc"; done
-    for alias in $1; do __mkalias "$alias" "${@:2}"; done
+    SERVICES "${@:2}"; for alias in $1; do __mkalias "$alias" "${@:2}"; done
 }
 __mkalias() {
      if (($#)); then with-alias "$1" __mkalias "${@:2}"; return; fi
      set-alias "$alias" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}
 }
-SERVICES() { for svc in "$@"; do set-alias "$svc" "$svc"; done; }
+SERVICES() { for svc in "$@"; do alias-exists "$svc" || set-alias "$svc" "$svc"; done; }
 VERSION() { FILTER ".version=\"$1\""; }
 export-dotenv() {
     local before="" after=""
@@ -56,13 +55,14 @@ export-dotenv() {
     after="$(echo "$after" | grep -vxF -f <(echo "$before"))" || true
     [[ -z "$after" ]] || export $after
 }
+alias-exists() { fn-exists "doco-alias-$1"; }
 DOCO_PREFIX_OPTS=
 DOCO_OPTS=
 
 compose() {
     docker-compose ${DOCO_PREFIX_OPTS-} --project-directory "$LOCO_ROOT" -f <(echo "$DOCO_CONFIG") ${DOCO_OPTS-} "$@"
 }
-get-alias() { if fn-exists "doco-alias-$1"; then "doco-alias-$1"; else REPLY=(); fi; }
+get-alias() { REPLY=(); ! alias-exists "$1" || "doco-alias-$1"; }
 project-name() {
     REPLY=${COMPOSE_PROJECT_NAME-}
     [[ $REPLY ]] || realpath.basename "$LOCO_ROOT"   # default to directory name
@@ -79,7 +79,6 @@ require-services() {
 set-alias() {
     local t=; (($#<2)) || printf -v t ' %q' "${@:2}"
     printf -v t 'doco-alias-%s() { REPLY=(%s); }' "$1" "$t"; eval "$t";
-    printf -v t 'doco.%s() { with-alias %q doco "$@"; }' "$1" "$1"; eval "$t"
     printf -v t '| (.services."%s" |= f ) ' "${@:2}"
     DEFINE "def ${1//[^_[:alnum:]]/_}(f): . $t;"  # jqmd function names have a limited charset
 }
@@ -93,7 +92,13 @@ with-service() {
 }
 mdsh_raw_jq_api+=($'def jqmd_data($other): . as $original |\n    reduce paths(type=="array") as $path (\n        (. // {}) * $other; setpath( $path; ($original | getpath($path)) + ($other | getpath($path)) )\n    );\n')
 DOCO_SERVICES=()
-loco_exec() { compose "$@" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}; }
+loco_exec() {
+    if alias-exists "$1"; then
+        with-alias "$1" doco "${@:2}";
+    else
+        compose "$@" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"};
+    fi
+}
 # Commands that don't accept a list of services
 for cmd in bundle config down help scale version; do
     eval "doco.$cmd() { compose $cmd \"\$@\"; }"
