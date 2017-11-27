@@ -20,6 +20,7 @@
     + [Automation](#automation)
       - [`alias-exists` *name*](#alias-exists-name)
       - [`compose`](#compose)
+      - [`find-services` *[jq-filter]*](#find-services-jq-filter)
       - [`get-alias` *alias*](#get-alias-alias)
       - [`project-name` *[service index]*](#project-name-service-index)
       - [`require-services` *flag command-name*](#require-services-flag-command-name)
@@ -27,7 +28,9 @@
       - [`with-alias` *alias command...*](#with-alias-alias-command)
       - [`with-service` *service(s) command...*](#with-service-services-command)
     + [jq API](#jq-api)
-      - [`jqmd_data`](#jqmd_data)
+      - [`jqmd_data($data)`](#jqmd_datadata)
+      - [`services`](#services)
+      - [`services_matching(filter)`](#services_matchingfilter)
   * [Docker-Compose Integration](#docker-compose-integration)
     + [Docker-Compose Subcommands](#docker-compose-subcommands)
       - [Multi-Service Subcommands](#multi-service-subcommands)
@@ -39,6 +42,7 @@
       - [Project-level Options](#project-level-options)
   * [Command-line Interface](#command-line-interface)
     + [doco options](#doco-options)
+      - [`--where` *jq-filter [subcommand args...]*](#--where-jq-filter-subcommand-args)
       - [`--with` *service [subcommand args...]*](#--with-service-subcommand-args)
       - [`--` *[subcommand args...]*](#---subcommand-args)
       - [`--with-default` *alias [subcommand args...]*](#--with-default-alias-subcommand-args)
@@ -321,6 +325,21 @@ compose() {
     docker-compose --tls --project-directory /*/doco.md -f /dev/fd/63 -f foo bar baz (glob)
 ~~~
 
+#### `find-services` *[jq-filter]*
+
+Search the docker compose configuration for `services_matching(`*jq-filter*`)`, returning their names as an array in `REPLY`.  If *jq-filter* isn't supplied, `true` is used.  (i.e., find all services.)
+
+```shell
+find-services() { REPLY=($(RUN_JQ -r "services_matching(${1-true}) | .key" - <<<"$DOCO_CONFIG")); }
+```
+
+~~~shell
+    $ find-services; declare -p REPLY
+    declare -a REPLY='([0]="example1")'
+    $ find-services false; declare -p REPLY
+    declare -a REPLY='()'
+~~~
+
 #### `get-alias` *alias*
 
 Return the current value of alias *alias* as an array in `REPLY`.  Returns an empty array if the alias doesn't exist.
@@ -467,14 +486,14 @@ with-service() {
 
 ### jq API
 
-#### `jqmd_data`
+#### `jqmd_data($data)`
 
-The `jqmd_data` function is used to combine YAML or JSON blocks found in a project's configuration file.  Currently, it's defined as a recursive addition of dictionaries that also does addition of arrays.  This generally does the right thing to assemble docker-compose configuration, so long as you're consistent in using dictionaries or arrays for a given setting.
+The `jqmd_data()` function is used to combine YAML or JSON blocks found in a project's configuration file.  Currently, it's defined as a recursive addition of dictionaries that also does addition of arrays.  This generally does the right thing to assemble docker-compose configuration, so long as you're consistent in using dictionaries or arrays for a given setting.
 
 ```jq api
-def jqmd_data($other): . as $original |
+def jqmd_data($data): . as $orig |
     reduce paths(type=="array") as $path (
-        (. // {}) * $other; setpath( $path; ($original | getpath($path)) + ($other | getpath($path)) )
+        (. // {}) * $data; setpath( $path; ($orig | getpath($path)) + ($data | getpath($path)) )
     );
 ```
 
@@ -493,6 +512,38 @@ def jqmd_data($other): . as $original |
         }
       }
     }
+~~~
+
+#### `services`
+
+Assuming that `.` is a docker-compose configuration, return the (possibly-empty) dictionary of services from it.  If the configuration is empty or a compose v1 file (i.e. it lacks both `.services` and `.version`), `.` is returned.
+
+```jq api
+def services: if .services // .version then .services else . end;
+```
+
+~~~shell
+    $ RUN_JQ -n -c '{x: 27} | services'                 # root if no services
+    {"x":27}
+    $ RUN_JQ -n -c '{services: {y:42}} | services'      # .services if present
+    {"y":42}
+    $ RUN_JQ -n -c '{version: "2.1"} | services'        # .services if .version
+    null
+~~~
+
+#### `services_matching(filter)`
+
+Assuming `.` is a docker-compose configuration, return a stream of `{key:, value:}` pairs containing the names and service dictionaries of services for which `(.value | filter)` returns truth.
+
+```jq api
+def services_matching(f): services | to_entries | .[] | select( .value | f ) ;
+```
+
+~~~shell
+    $ RUN_JQ -r 'services_matching(true) | .key' <<<"$DOCO_CONFIG"
+    example1
+    $ RUN_JQ -r 'services_matching(.image == "bash") | .value.command' <<<"$DOCO_CONFIG"
+    bash -c 'echo hello world; echo'
 ~~~
 
 ## Docker-Compose Integration
@@ -655,6 +706,35 @@ doco.--project-directory() { loco_error "doco: --project-directory cannot be ove
 ## Command-line Interface
 
 ### doco options
+
+#### `--where` *jq-filter [subcommand args...]*
+
+Add services matching *jq-filter* to the current service set and invoke `doco` *subcommand args...*.  If the subcommand is omitted, outputs service names to stdout, one per line, returning a failure status of 1 and a message on stderr if no services match the given filter.  The filter is a jq expression that will be applied to the body of a service definition as it appears in the form *provided* to docker-compose.  (That is, values supplied by `extends` or variable interpolation are not available.)
+
+```shell
+doco.--where() {
+    find-services "${@:1}"
+    if (($#>1)); then
+        with-service "${REPLY[*]-}" doco "${@:2}"   # run command on matching services
+    elif ! ((${#REPLY[@]})); then
+        echo "No matching services" >&2; return 1
+    else
+        printf "%s\n" "${REPLY[@]}"   # list matching services
+    fi
+}
+```
+
+~~~shell
+    $ doco --where true
+    example1
+    $ doco --where false
+    No matching services
+    [1]
+    $ doco --where false ps
+    docker-compose * ps (glob)
+    $ doco --where true ps
+    docker-compose * ps example1 (glob)
+~~~
 
 #### `--with` *service [subcommand args...]*
 

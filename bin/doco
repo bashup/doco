@@ -62,6 +62,7 @@ DOCO_OPTS=
 compose() {
     docker-compose ${DOCO_PREFIX_OPTS-} --project-directory "$LOCO_ROOT" -f <(echo "$DOCO_CONFIG") ${DOCO_OPTS-} "$@"
 }
+find-services() { REPLY=($(RUN_JQ -r "services_matching(${1-true}) | .key" - <<<"$DOCO_CONFIG")); }
 get-alias() { REPLY=(); ! alias-exists "$1" || "doco-alias-$1"; }
 project-name() {
     REPLY=${COMPOSE_PROJECT_NAME-}
@@ -90,7 +91,9 @@ with-service() {
     done
     "${@:2}"
 }
-mdsh_raw_jq_api+=($'def jqmd_data($other): . as $original |\n    reduce paths(type=="array") as $path (\n        (. // {}) * $other; setpath( $path; ($original | getpath($path)) + ($other | getpath($path)) )\n    );\n')
+mdsh_raw_jq_api+=($'def jqmd_data($data): . as $orig |\n    reduce paths(type=="array") as $path (\n        (. // {}) * $data; setpath( $path; ($orig | getpath($path)) + ($data | getpath($path)) )\n    );\n')
+mdsh_raw_jq_api+=($'def services: if .services // .version then .services else . end;\n')
+mdsh_raw_jq_api+=($'def services_matching(f): services | to_entries | .[] | select( .value | f ) ;\n')
 DOCO_SERVICES=()
 loco_exec() {
     if alias-exists "$1"; then
@@ -147,6 +150,16 @@ docker-compose-immediate -h --help -v --version
 doco.-p() { loco_error "You must use COMPOSE_PROJECT_NAME to set the project name."; }
 doco.--project-name() { doco -p "$@"; }
 doco.--project-directory() { loco_error "doco: --project-directory cannot be overridden"; }
+doco.--where() {
+    find-services "${@:1}"
+    if (($#>1)); then
+        with-service "${REPLY[*]-}" doco "${@:2}"   # run command on matching services
+    elif ! ((${#REPLY[@]})); then
+        echo "No matching services" >&2; return 1
+    else
+        printf "%s\n" "${REPLY[@]}"   # list matching services
+    fi
+}
 # Execute the rest of the command line with specified service(s)
 doco.--with() { with-service "$1" doco "${@:2}"; }
 # Execute the rest of the command line with NO specified service(s)
