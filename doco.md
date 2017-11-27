@@ -175,6 +175,8 @@ loco_loadproject() {
 
 Add *targets* to the named alias(es), defining or redefining subcommands and jq functions to map those aliases to the targeted services.  The *targets* may be services or aliases; if a target name isn't recognized it's assumed to be a service and defined as such.  Multiple aliases can be updated at once by passing them as a space-separated string in the first argument, e.g. `ALIAS "foo bar" baz spam` adds `baz` and `spam` to both the `foo` and `bar` aliases.
 
+(Note that this function *adds* to the existing alias(es) and recursively expands aliases in the target list.  If you want to set an exact list of services, use `set-alias` instead.  Also note that the "recursive" expansion is *immediate*: redefining an alias used in the target list will not change the definition of the alias referencing it.)
+
 ```shell
 ALIAS() {
     local alias svc DOCO_SERVICES=()
@@ -343,12 +345,12 @@ project-name() {
 
 #### `require-services` *flag command-name*
 
-Checks the number of currently selected services, based on *flag*.  If flag is `1`, then exactly one service must be selected; if `-`, then 0 or 1 services.  `+` means 1 or more services are required.  If the number of services selected (e.g. via the `--with` subcommand), does not match the requirement, abort with a usage error using *command-name*.
+Checks the number of currently selected services, based on *flag*.  If flag is `1`, then exactly one service must be selected; if `-`, then 0 or 1 services.  `+` means 1 or more services are required.  A flag of `.` is a no-op; i.e. all counts are acceptable. If the number of services selected (e.g. via the `--with` subcommand), does not match the requirement, abort with a usage error using *command-name*.
 
 ```shell
 require-services() {
     case "$1${#DOCO_SERVICES[@]}" in
-    ?1|-0) return ;;  # 1 is always acceptable
+    ?1|-0|.*) return ;;  # 1 is always acceptable
     ?0)    loco_error "no services specified for $2" ;;
     [-1]*) loco_error "$2 cannot be used on multiple services" ;;
     esac
@@ -356,34 +358,37 @@ require-services() {
 ```
 
 ~~~shell
+# Test harness:
     $ doco.test-rs() { require-services "$1" test-rs; echo success; }
+    $ test-rs() { (doco -- "${@:2}" test-rs "$1") || echo "[$?]"; }
+    $ test-rs-all() { test-rs $1; test-rs $1 --with "x y"; test-rs $1 --with foo; }
 
 # 1 = exactly one service
-    $ (doco -- test-rs 1)
+    $ test-rs-all 1
     no services specified for test-rs
     [64]
-    $ (doco --with "x y" test-rs 1)
     test-rs cannot be used on multiple services
     [64]
-    $ (doco --with foo test-rs 1)
     success
 
 # - = at most one service
-    $ (doco -- test-rs -)
+    $ test-rs-all -
     success
-    $ (doco --with "x y" test-rs -)
     test-rs cannot be used on multiple services
     [64]
-    $ (doco --with foo test-rs -)
     success
 
 # + = at least one service
-    $ (doco -- test-rs +)
+    $ test-rs-all +
     no services specified for test-rs
     [64]
-    $ (doco --with "x y" test-rs +)
     success
-    $ (doco --with foo test-rs 1)
+    success
+
+# . = any number of services
+    $ test-rs-all .
+    success
+    success
     success
 ~~~
 
@@ -683,12 +688,18 @@ doco.--with-default() {
 This is the command-line equivalent of calling `require-services` *flag subcommand* before invoking *subcommand args...*.  That is, it checks that the relevant number of services are present and exits with a usage error if not.
 
 ```shell
-doco.--require-services() { require-services "${@:1:2}" && doco "${@:2}"; }
+doco.--require-services() {
+    [[ ${1-} == [-+1.] ]] || loco_error "--required-services argument must be ., -, +, or 1"
+    require-services "${@:1:2}" && doco "${@:2}";
+}
 ```
 
 ~~~shell
     $ (doco -- --require-services 1 ps)
     no services specified for ps
+    [64]
+    $ (doco -- --require-services ps)
+    --required-services argument must be ., -, +, or 1
     [64]
 ~~~
 

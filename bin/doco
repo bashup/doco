@@ -71,7 +71,7 @@ project-name() {
 }
 require-services() {
     case "$1${#DOCO_SERVICES[@]}" in
-    ?1|-0) return ;;  # 1 is always acceptable
+    ?1|-0|.*) return ;;  # 1 is always acceptable
     ?0)    loco_error "no services specified for $2" ;;
     [-1]*) loco_error "$2 cannot be used on multiple services" ;;
     esac
@@ -149,7 +149,10 @@ doco.--()   { local DOCO_SERVICES=(); doco "$@"; }
 doco.--with-default() {
     if ((${#DOCO_SERVICES[@]})); then doco "${@:2}"; else doco "$@"; fi
 }
-doco.--require-services() { require-services "${@:1:2}" && doco "${@:2}"; }
+doco.--require-services() {
+    [[ ${1-} == [-+1.] ]] || loco_error "--required-services argument must be ., -, +, or 1"
+    require-services "${@:1:2}" && doco "${@:2}";
+}
 doco.cp() {
     local opts= seen=
     while (($#)); do
