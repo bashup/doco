@@ -153,6 +153,7 @@ doco.--require-services() {
     [[ ${1-} == [-+1.] ]] || loco_error "--required-services argument must be ., -, +, or 1"
     require-services "${@:1:2}" && doco "${@:2}";
 }
+doco.cmd() { doco --with-default cmd-default --require-services "$@"; }
 doco.cp() {
     local opts= seen=
     while (($#)); do
@@ -183,7 +184,7 @@ doco.cp() {
     docker cp $opts
 }
 doco.jq() { echo "$DOCO_CONFIG" | RUN_JQ "$@"; }
-doco.sh() { doco --with-default shell-default --require-services 1 exec bash "$@"; }
+doco.sh() { doco cmd 1 exec bash "$@"; }
 { if [[ $OSTYPE != cygwin && $OSTYPE != msys && -e /dev/fd/0 ]]; then source /dev/fd/0; else source <(cat); fi; } <<'# --- EOF jqmd ---'
 #!/usr/bin/env bash
 # ---
@@ -386,7 +387,6 @@ extract-between() { sed -ne '/'"$1"'/,/'"$2"'/ { s/\('"$1"'\)/'"${3-}"'/; s/'"$2
 if [[ "$0" == "${BASH_SOURCE[0]}" ]]; then mdsh-main "$@"; exit $?; fi
 # --- EOF jqmd ---
 DEFINE "${mdsh_raw_jq_api[*]}"
-set-alias shell-default
 mdsh-error() { printf -v REPLY "$1\n" "${@:2}"; loco_error "$REPLY"; }
 #!/usr/bin/env bash
 

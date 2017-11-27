@@ -12,7 +12,7 @@
     + [Project-Level Configuration](#project-level-configuration)
   * [API](#api)
     + [Declarations](#declarations)
-      - [`ALIAS` *name(s) services...*](#alias-names-services)
+      - [`ALIAS` *name(s) targets...*](#alias-names-targets)
       - [`SERVICES` *name...*](#services-name)
       - [`VERSION` *docker-compose version*](#version-docker-compose-version)
     + [Config](#config)
@@ -43,6 +43,7 @@
       - [`--with-default` *alias [subcommand args...]*](#--with-default-alias-subcommand-args)
       - [`--require-services` *flag [subcommand args...]*](#--require-services-flag-subcommand-args)
     + [doco subcommands](#doco-subcommands)
+      - [`cmd` *flag subcommand...*](#cmd-flag-subcommand)
       - [`cp` *[opts] src dest*](#cp-opts-src-dest)
       - [`jq`](#jq)
       - [`sh`](#sh)
@@ -705,6 +706,23 @@ doco.--require-services() {
 
 ### doco subcommands
 
+#### `cmd` *flag subcommand...*
+
+Shorthand for `--with-default cmd-default --require-services` *flag subcommand...*.  That is, if the current service set is empty, it defaults to the contents of the `cmd-default` alias, if any.  The number of services is then verified with `--require-services` before executing *subcommand*.  This makes it easy to define new subcommands that work on a default container or group of containers.  (For example, the `doco sh` command is defined as `doco cmd 1 exec bash "$@"` -- i.e., it runs on exactly one service, defaulting to the `cmd-default` alias.)
+
+```shell
+doco.cmd() { doco --with-default cmd-default --require-services "$@"; }
+```
+
+ ~~~shell
+    $ (doco cmd 1 test)
+    no services specified for test
+    [64]
+
+    $ (set-alias cmd-default foxtrot; doco cmd 1 exec testme)
+    docker-compose * exec foxtrot testme (glob)
+ ~~~
+
 #### `cp` *[opts] src dest*
 
 Copy a file in or out of a service container.  Functions the same as `docker cp`, except that instead of using a container name as a prefix, you can use either a service name or an empty string (meaning, the currently-selected service).  So, e.g. `doco cp :/foo bar` copies `/foo` from the current service to `bar`, while `doco cp baz spam:/thing` copies `baz` to `/thing` inside the `spam` service's first container.  If no service is selected and no service name is given, the `shell-default` alias is tried.
@@ -801,7 +819,7 @@ doco.jq() { echo "$DOCO_CONFIG" | RUN_JQ "$@"; }
 `doco sh` *args...* executes `bash` *args* in the specified service's container.  If no service is specified, it defaults to the `shell-default` alias.  Multiple services are not allowed.
 
 ```shell
-doco.sh() { doco --with-default shell-default --require-services 1 exec bash "$@"; }
+doco.sh() { doco cmd 1 exec bash "$@"; }
 ```
 
 ~~~shell
@@ -816,7 +834,7 @@ doco.sh() { doco --with-default shell-default --require-services 1 exec bash "$@
     $ doco alfa sh
     docker-compose * exec alfa bash (glob)
 
-    $ (ALIAS shell-default foxtrot; doco sh -c 'echo foo')
+    $ (ALIAS cmd-default foxtrot; doco sh -c 'echo foo')
     docker-compose * exec foxtrot bash -c echo\ foo (glob)
 ~~~
 
@@ -829,7 +847,6 @@ mdsh-embed jqmd
 ```
 ```shell
 DEFINE "${mdsh_raw_jq_api[*]}"
-set-alias shell-default
 mdsh-error() { printf -v REPLY "$1\n" "${@:2}"; loco_error "$REPLY"; }
 ```
 ```shell mdsh
