@@ -39,13 +39,14 @@ loco_loadproject() {
     CLEAR_FILTERS  # doing RUN_JQ in a subshell doesn't reset the current shell's state
 }
 ALIAS() {
-    local alias svc
+    local alias svc DOCO_SERVICES=()
     (($#>1)) || loco_error "ALIAS requires at least two arguments"
-    for alias in $1; do
-        get-alias "$alias"
-        for svc in "${@:2}"; do [[ " ${REPLY[*]-} " == *" $svc "* ]] || REPLY+=("$svc"); done
-        set-alias "$alias" "${REPLY[@]}"
-    done
+    for svc in "${@:2}"; do fn-exists "doco-alias-$svc" || SERVICES "$svc"; done
+    for alias in $1; do __mkalias "$alias" "${@:2}"; done
+}
+__mkalias() {
+     if (($#)); then with-alias "$1" __mkalias "${@:2}"; return; fi
+     set-alias "$alias" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}
 }
 SERVICES() { for svc in "$@"; do set-alias "$svc" "$svc"; done; }
 VERSION() { FILTER ".version=\"$1\""; }
@@ -76,11 +77,11 @@ require-services() {
     esac
 }
 set-alias() {
-    local t
-    printf -v t ' %q' "${@:2}"
+    local t=; (($#<2)) || printf -v t ' %q' "${@:2}"
     printf -v t 'doco-alias-%s() { REPLY=(%s); }' "$1" "$t"; eval "$t";
     printf -v t 'doco.%s() { with-alias %q doco "$@"; }' "$1" "$1"; eval "$t"
-    printf -v t '| (.services.%s |= f ) ' "${@:2}"; DEFINE "def $1(f): . $t;"
+    printf -v t '| (.services."%s" |= f ) ' "${@:2}"
+    DEFINE "def ${1//[^_[:alnum:]]/_}(f): . $t;"  # jqmd function names have a limited charset
 }
 with-alias() { get-alias "$1"; with-service "${REPLY[*]-}" "${@:2}"; }
 with-service() {
@@ -180,7 +181,6 @@ doco.cp() {
 }
 doco.jq() { echo "$DOCO_CONFIG" | RUN_JQ "$@"; }
 doco.sh() { doco --with-default shell-default --require-services 1 exec bash "$@"; }
-doco.shell-default() { doco "$@"; }   # no-op until/unless aliased
 { if [[ $OSTYPE != cygwin && $OSTYPE != msys && -e /dev/fd/0 ]]; then source /dev/fd/0; else source <(cat); fi; } <<'# --- EOF jqmd ---'
 #!/usr/bin/env bash
 # ---
@@ -382,7 +382,8 @@ extract-between() { sed -ne '/'"$1"'/,/'"$2"'/ { s/\('"$1"'\)/'"${3-}"'/; s/'"$2
 # check bash-source and run main only if directly executing
 if [[ "$0" == "${BASH_SOURCE[0]}" ]]; then mdsh-main "$@"; exit $?; fi
 # --- EOF jqmd ---
-DEFINE "$mdsh_raw_jq_api"
+DEFINE "${mdsh_raw_jq_api[*]}"
+set-alias shell-default
 mdsh-error() { printf -v REPLY "$1\n" "${@:2}"; loco_error "$REPLY"; }
 #!/usr/bin/env bash
 

@@ -171,19 +171,20 @@ loco_loadproject() {
 
 ### Declarations
 
-#### `ALIAS` *name(s) services...*
+#### `ALIAS` *name(s) targets...*
 
-Add *services* to the named alias(es), defining or redefining subcommands and jq functions to map those aliases to their defined services.   Multiple aliases can be updated at once by passing them as a space-separated string in the first argument, e.g. `ALIAS "foo bar" baz spam` adds `baz` and `spam` to both the `foo` and `bar` aliases.
+Add *targets* to the named alias(es), defining or redefining subcommands and jq functions to map those aliases to the targeted services.  The *targets* may be services or aliases; if a target name isn't recognized it's assumed to be a service and defined as such.  Multiple aliases can be updated at once by passing them as a space-separated string in the first argument, e.g. `ALIAS "foo bar" baz spam` adds `baz` and `spam` to both the `foo` and `bar` aliases.
 
 ```shell
 ALIAS() {
-    local alias svc
+    local alias svc DOCO_SERVICES=()
     (($#>1)) || loco_error "ALIAS requires at least two arguments"
-    for alias in $1; do
-        get-alias "$alias"
-        for svc in "${@:2}"; do [[ " ${REPLY[*]-} " == *" $svc "* ]] || REPLY+=("$svc"); done
-        set-alias "$alias" "${REPLY[@]}"
-    done
+    for svc in "${@:2}"; do fn-exists "doco-alias-$svc" || SERVICES "$svc"; done
+    for alias in $1; do __mkalias "$alias" "${@:2}"; done
+}
+__mkalias() {
+     if (($#)); then with-alias "$1" __mkalias "${@:2}"; return; fi
+     set-alias "$alias" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}
 }
 ```
 
@@ -196,24 +197,30 @@ ALIAS() {
 
 # Alias one, non-existing name
 
-    $ ALIAS delta echo gamma
-    $ doco delta ps
-    docker-compose * ps echo gamma (glob)
-    $ RUN_JQ -c -n '{} | delta(.image = "test")'
-    {"services":{"echo":{"image":"test"},"gamma":{"image":"test"}}}
+    $ ALIAS delta-xray echo gamma-zulu
+    $ doco delta-xray ps
+    docker-compose * ps echo gamma-zulu (glob)
+    $ RUN_JQ -c -n '{} | delta_xray(.image = "test")'
+    {"services":{"echo":{"image":"test"},"gamma-zulu":{"image":"test"}}}
 
 # Add to multiple aliases, adding but not duplicating
 
-    $ ALIAS "tango delta" niner gamma
-    $ doco delta ps
-    docker-compose * ps echo gamma niner (glob)
-    $ RUN_JQ -c -n '{} | delta(.image = "test")'
-    {"services":{"echo":{"image":"test"},"gamma":{"image":"test"},"niner":{"image":"test"}}}
+    $ ALIAS "tango delta-xray" niner gamma-zulu
+    $ doco delta-xray ps
+    docker-compose * ps echo gamma-zulu niner (glob)
+    $ RUN_JQ -c -n '{} | delta_xray(.image = "test")'
+    {"services":{"echo":{"image":"test"},"gamma-zulu":{"image":"test"},"niner":{"image":"test"}}}
 
     $ doco tango ps
-    docker-compose * ps niner gamma (glob)
+    docker-compose * ps niner gamma-zulu (glob)
     $ RUN_JQ -c -n '{} | tango(.image = "test")'
-    {"services":{"niner":{"image":"test"},"gamma":{"image":"test"}}}
+    {"services":{"niner":{"image":"test"},"gamma-zulu":{"image":"test"}}}
+
+# "Recursive" alias expansion
+
+    $ ALIAS whiskey tango foxtrot
+    $ doco whiskey ps
+    docker-compose * ps niner gamma-zulu foxtrot (glob)
 ~~~
 
 #### `SERVICES` *name...*
@@ -307,7 +314,7 @@ get-alias() { if fn-exists "doco-alias-$1"; then "doco-alias-$1"; else REPLY=();
 ~~~shell
     $ get-alias tango; printf '%q\n' ${REPLY[@]}
     niner
-    gamma
+    gamma-zulu
     $ get-alias nonesuch; echo ${#REPLY[@]}
     0
 ~~~
@@ -382,15 +389,15 @@ require-services() {
 
 #### `set-alias` *alias services...*
 
-Set the named *alias* to expand to the given list of services.  Similar to `ALIAS`, except that the existing service list for the alias is overwritten, and only one *alias* can be supplied.
+Set the named *alias* to expand to the given list of services.  Similar to `ALIAS`, except that the existing service list for the alias is overwritten, only one *alias* can be supplied, and the supplied targets are interpreted as service names, ignoring any aliases.
 
 ```shell
 set-alias() {
-    local t
-    printf -v t ' %q' "${@:2}"
+    local t=; (($#<2)) || printf -v t ' %q' "${@:2}"
     printf -v t 'doco-alias-%s() { REPLY=(%s); }' "$1" "$t"; eval "$t";
     printf -v t 'doco.%s() { with-alias %q doco "$@"; }' "$1" "$1"; eval "$t"
-    printf -v t '| (.services.%s |= f ) ' "${@:2}"; DEFINE "def $1(f): . $t;"
+    printf -v t '| (.services."%s" |= f ) ' "${@:2}"
+    DEFINE "def ${1//[^_[:alnum:]]/_}(f): . $t;"  # jqmd function names have a limited charset
 }
 ```
 
@@ -739,8 +746,8 @@ doco.cp() {
     no services specified for cp
     [64]
 
-    $ (ALIAS shell-default tango; doco cp :x y)
-    docker cp docomd_tango_1:x y
+    $ (ALIAS shell-default bravo; doco cp :x y)
+    docker cp docomd_bravo_1:x y
 
 # Bad usages
 
@@ -784,7 +791,6 @@ doco.jq() { echo "$DOCO_CONFIG" | RUN_JQ "$@"; }
 
 ```shell
 doco.sh() { doco --with-default shell-default --require-services 1 exec bash "$@"; }
-doco.shell-default() { doco "$@"; }   # no-op until/unless aliased
 ```
 
 ~~~shell
@@ -811,7 +817,8 @@ We embed a copy of the jqmd source (so it doesn't have to be installed separatel
 mdsh-embed jqmd
 ```
 ```shell
-DEFINE "$mdsh_raw_jq_api"
+DEFINE "${mdsh_raw_jq_api[*]}"
+set-alias shell-default
 mdsh-error() { printf -v REPLY "$1\n" "${@:2}"; loco_error "$REPLY"; }
 ```
 ```shell mdsh
