@@ -667,11 +667,11 @@ doco.--()   { local DOCO_SERVICES=(); doco "$@"; }
 
 #### `--with-default` *alias [subcommand args...]*
 
-If no services are selected, invoke *alias subcommand args...*; otherwise invoke *subcommand args...*.  *alias* must be a valid `doco` subcommand, normally a service or group alias created with `SERVICES` or `ALIAS`.
+Invoke *subcommand args...*, adding *alias* to the current service set if the current set is empty.  *alias* can be nonexistent or empty, so you may wish to follow this option with `--require-services` to verify the new count.
 
 ```shell
 doco.--with-default() {
-    if ((${#DOCO_SERVICES[@]})); then doco "${@:2}"; else doco "$@"; fi
+    if ((${#DOCO_SERVICES[@]})); then doco "${@:2}"; else with-alias "$1" doco "${@:2}"; fi
 }
 ```
 

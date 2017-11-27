@@ -147,7 +147,7 @@ doco.--with() { with-service "$1" doco "${@:2}"; }
 # Execute the rest of the command line with NO specified service(s)
 doco.--()   { local DOCO_SERVICES=(); doco "$@"; }
 doco.--with-default() {
-    if ((${#DOCO_SERVICES[@]})); then doco "${@:2}"; else doco "$@"; fi
+    if ((${#DOCO_SERVICES[@]})); then doco "${@:2}"; else with-alias "$1" doco "${@:2}"; fi
 }
 doco.--require-services() {
     [[ ${1-} == [-+1.] ]] || loco_error "--required-services argument must be ., -, +, or 1"
