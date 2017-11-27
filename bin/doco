@@ -39,21 +39,15 @@ loco_loadproject() {
     CLEAR_FILTERS  # doing RUN_JQ in a subshell doesn't reset the current shell's state
 }
 ALIAS() {
-    local alias svc tmp
+    local alias svc
     (($#>1)) || loco_error "ALIAS requires at least two arguments"
     for alias in $1; do
         get-alias "$alias"
-        for svc in "${@:2}"; do
-            [[ " ${REPLY[*]-} " == *" $svc "* ]] || REPLY+=("$svc")
-        done
-        printf -v tmp ' %q' "${REPLY[@]}"
-        printf -v tmp 'doco-alias-%s() { REPLY=(%s); }' "$alias" "$tmp"; eval "$tmp";
-        printf -v tmp 'doco.%s() { get-alias %q; doco --with "${REPLY[*]-}" "$@"; }' "$alias" "$alias"; eval "$tmp"
-        printf -v tmp '| (.services.%s |= f ) ' "${REPLY[@]}"
-        DEFINE "def $alias(f): . $tmp;"
+        for svc in "${@:2}"; do [[ " ${REPLY[*]-} " == *" $svc "* ]] || REPLY+=("$svc"); done
+        set-alias "$alias" "${REPLY[@]}"
     done
 }
-SERVICES() { for svc in "$@"; do ALIAS "$svc" "$svc"; done; }
+SERVICES() { for svc in "$@"; do set-alias "$svc" "$svc"; done; }
 VERSION() { FILTER ".version=\"$1\""; }
 export-dotenv() {
     local before="" after=""
@@ -80,6 +74,13 @@ require-services() {
     ?0)    loco_error "no services specified for $2" ;;
     [-1]*) loco_error "$2 cannot be used on multiple services" ;;
     esac
+}
+set-alias() {
+    local t
+    printf -v t ' %q' "${@:2}"
+    printf -v t 'doco-alias-%s() { REPLY=(%s); }' "$1" "$t"; eval "$t";
+    printf -v t 'doco.%s() { get-alias %q; doco --with "${DOCO_SERVICES[*]-} ${REPLY[*]-}" "$@"; }' "$1" "$1"; eval "$t"
+    printf -v t '| (.services.%s |= f ) ' "${@:2}"; DEFINE "def $1(f): . $t;"
 }
 mdsh_raw_jq_api+=($'def jqmd_data($other): . as $original |\n    reduce paths(type=="array") as $path (\n        (. // {}) * $other; setpath( $path; ($original | getpath($path)) + ($other | getpath($path)) )\n    );\n')
 DOCO_SERVICES=()

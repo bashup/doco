@@ -22,6 +22,7 @@
       - [`get-alias` *alias*](#get-alias-alias)
       - [`project-name` *[service index]*](#project-name-service-index)
       - [`require-services` *flag command-name*](#require-services-flag-command-name)
+      - [`set-alias` *alias services...*](#set-alias-alias-services)
     + [jq API](#jq-api)
       - [`jqmd_data`](#jqmd_data)
   * [Docker-Compose Integration](#docker-compose-integration)
@@ -174,18 +175,12 @@ Add *services* to the named alias(es), defining or redefining subcommands and jq
 
 ```shell
 ALIAS() {
-    local alias svc tmp
+    local alias svc
     (($#>1)) || loco_error "ALIAS requires at least two arguments"
     for alias in $1; do
         get-alias "$alias"
-        for svc in "${@:2}"; do
-            [[ " ${REPLY[*]-} " == *" $svc "* ]] || REPLY+=("$svc")
-        done
-        printf -v tmp ' %q' "${REPLY[@]}"
-        printf -v tmp 'doco-alias-%s() { REPLY=(%s); }' "$alias" "$tmp"; eval "$tmp";
-        printf -v tmp 'doco.%s() { get-alias %q; doco --with "${REPLY[*]-}" "$@"; }' "$alias" "$alias"; eval "$tmp"
-        printf -v tmp '| (.services.%s |= f ) ' "${REPLY[@]}"
-        DEFINE "def $alias(f): . $tmp;"
+        for svc in "${@:2}"; do [[ " ${REPLY[*]-} " == *" $svc "* ]] || REPLY+=("$svc"); done
+        set-alias "$alias" "${REPLY[@]}"
     done
 }
 ```
@@ -226,7 +221,7 @@ Define subcommands and jq functions for the given service names.  `SERVICES foo 
 Note: this command is a shortcut for aliasing a service name to itself; if you alias o
 
 ```shell
-SERVICES() { for svc in "$@"; do ALIAS "$svc" "$svc"; done; }
+SERVICES() { for svc in "$@"; do set-alias "$svc" "$svc"; done; }
 ```
 
 ~~~shell
@@ -381,6 +376,28 @@ require-services() {
     success
     $ (doco --with foo test-rs 1)
     success
+~~~
+
+#### `set-alias` *alias services...*
+
+Set the named *alias* to expand to the given list of services.  Similar to `ALIAS`, except that the existing service list for the alias is overwritten, and only one *alias* can be supplied.
+
+```shell
+set-alias() {
+    local t
+    printf -v t ' %q' "${@:2}"
+    printf -v t 'doco-alias-%s() { REPLY=(%s); }' "$1" "$t"; eval "$t";
+    printf -v t 'doco.%s() { get-alias %q; doco --with "${DOCO_SERVICES[*]-} ${REPLY[*]-}" "$@"; }' "$1" "$1"; eval "$t"
+    printf -v t '| (.services.%s |= f ) ' "${@:2}"; DEFINE "def $1(f): . $t;"
+}
+```
+
+~~~shell
+    $ set-alias fiz bar; get-alias fiz; printf '%q\n' "${REPLY[@]}"
+    bar
+    $ set-alias fiz bar baz; get-alias fiz; printf '%q\n' "${REPLY[@]}"
+    bar
+    baz
 ~~~
 
 ### jq API
