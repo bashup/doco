@@ -42,9 +42,10 @@
       - [Project-level Options](#project-level-options)
   * [Command-line Interface](#command-line-interface)
     + [doco options](#doco-options)
+      - [`--` *[subcommand args...]*](#---subcommand-args)
+      - [`--all` *subcommand args...*](#--all-subcommand-args)
       - [`--where` *jq-filter [subcommand args...]*](#--where-jq-filter-subcommand-args)
       - [`--with` *service [subcommand args...]*](#--with-service-subcommand-args)
-      - [`--` *[subcommand args...]*](#---subcommand-args)
       - [`--with-default` *alias [subcommand args...]*](#--with-default-alias-subcommand-args)
       - [`--require-services` *flag [subcommand args...]*](#--require-services-flag-subcommand-args)
     + [doco subcommands](#doco-subcommands)
@@ -707,6 +708,33 @@ doco.--project-directory() { loco_error "doco: --project-directory cannot be ove
 
 ### doco options
 
+#### `--` *[subcommand args...]*
+
+Reset the active service set to empty.  This can be used to ensure a command is invoked for all (or no) services, even if a service set was previously selected:
+
+```shell
+# Execute the rest of the command line with NO specified service(s)
+doco.--()   { local DOCO_SERVICES=(); doco "$@"; }
+```
+
+~~~shell
+    $ doco --with "a b c" -- ps
+    docker-compose * ps (glob)
+~~~
+
+#### `--all` *subcommand args...*
+
+Update the service set to include *all* services, then invoke `doco` *subcommand args*.... Note that this is different from executing normal docker-compose commands with an empty (`--`) set, in that it explicitly lists all the services.
+
+```shell
+doco.--all() { doco --where true "$@"; }
+```
+
+~~~shell
+    $ doco --all ps
+    docker-compose * ps example1 (glob)
+~~~
+
 #### `--where` *jq-filter [subcommand args...]*
 
 Add services matching *jq-filter* to the current service set and invoke `doco` *subcommand args...*.  If the subcommand is omitted, outputs service names to stdout, one per line, returning a failure status of 1 and a message on stderr if no services match the given filter.  The filter is a jq expression that will be applied to the body of a service definition as it appears in the form *provided* to docker-compose.  (That is, values supplied by `extends` or variable interpolation are not available.)
@@ -752,20 +780,6 @@ At first glance, this command might appear redundant to simply adding the servic
     docker-compose * ps a b (glob)
     $ doco --with "a b" --with c ps
     docker-compose * ps a b c (glob)
-~~~
-
-#### `--` *[subcommand args...]*
-
-Reset the active service set to empty.  This can be used to ensure a command is invoked for all (or no) services, even if a service set was previously selected:
-
-```shell
-# Execute the rest of the command line with NO specified service(s)
-doco.--()   { local DOCO_SERVICES=(); doco "$@"; }
-```
-
-~~~shell
-    $ doco --with "a b c" -- ps
-    docker-compose * ps (glob)
 ~~~
 
 #### `--with-default` *alias [subcommand args...]*
