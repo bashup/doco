@@ -37,6 +37,7 @@ loco_loadproject() {
         loco_error "Unrecognized project file type: $1" ;;
     esac
     CLEAR_FILTERS  # doing RUN_JQ in a subshell doesn't reset the current shell's state
+    find-services; ${REPLY[@]+SERVICES "${REPLY[@]}"}   # ensure SERVICES exist for all services
 }
 ALIAS() {
     local alias svc DOCO_SERVICES=()

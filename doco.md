@@ -123,7 +123,7 @@ loco_preconfig() {
 
 ### Project-Level Configuration
 
-Project configuration is loaded into the `DOCO_CONFIG` var as JSON text.  This may be done by reading it from `docker-compose.yml` or from the data and jq code embedded in a `*.doco.md` file.  If the project file is a `.doco` file, it's sourced and any jq filters in it are applied to the `docker-compose.yml`.
+Project configuration is loaded into the `DOCO_CONFIG` var as JSON text.  This may be done by reading it from `docker-compose.yml` or from the data and jq code embedded in a `*.doco.md` file.  If the project file is a `.doco` file, it's sourced and any jq filters in it are applied to the `docker-compose.yml`.  However the configuration is loaded, aliases are created for any services that don't already have them.
 
 ```shell
 loco_loadproject() {
@@ -140,6 +140,7 @@ loco_loadproject() {
         loco_error "Unrecognized project file type: $1" ;;
     esac
     CLEAR_FILTERS  # doing RUN_JQ in a subshell doesn't reset the current shell's state
+    find-services; ${REPLY[@]+SERVICES "${REPLY[@]}"}   # ensure SERVICES exist for all services
 }
 ```
 
@@ -166,8 +167,9 @@ loco_loadproject() {
 
 # .env file is auto-loaded
     $ echo "FOO=bazbar" >.env
-    $ echo 'doco.dump() { echo "$FOO"; }' >.doco
-    $ command doco dump
+    $ echo 'doco.dump() { echo "${DOCO_SERVICES[@]}"; echo "$FOO"; }' >.doco
+    $ command doco t dump
+    t
     bazbar
 
 # Back to the test root
