@@ -98,7 +98,7 @@ mdsh_raw_jq_api+=($'def services_matching(f): services | to_entries | .[] | sele
 DOCO_SERVICES=()
 loco_exec() {
     if alias-exists "$1"; then
-        with-alias "$1" doco "${@:2}";
+        with-alias "$1" ${2+doco "${@:2}"};
     else
         compose "$@" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"};
     fi

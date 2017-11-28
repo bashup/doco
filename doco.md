@@ -561,7 +561,7 @@ Unrecognized subcommands are first checked to see if they're an alias.  If not, 
 DOCO_SERVICES=()
 loco_exec() {
     if alias-exists "$1"; then
-        with-alias "$1" doco "${@:2}";
+        with-alias "$1" ${2+doco "${@:2}"};
     else
         compose "$@" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"};
     fi
@@ -573,6 +573,7 @@ loco_exec() {
     docker-compose * foo (glob)
     $ (ALIAS foo bar; doco foo ps)
     docker-compose * ps bar (glob)
+    $ (ALIAS foo bar; doco foo bar)
 ~~~
 
 #### Non-Service Subcommands
