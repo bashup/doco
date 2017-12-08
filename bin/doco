@@ -85,12 +85,8 @@ export-dotenv() {
     [[ -z "$after" ]] || export $after
 }
 alias-exists() { fn-exists "doco-alias-$1"; }
-DOCO_PREFIX_OPTS=
-DOCO_OPTS=
-
-compose() {
-    docker-compose ${DOCO_PREFIX_OPTS-} ${DOCO_OPTS-} "$@"
-}
+DOCO_OPTS=()
+compose() { docker-compose ${DOCO_OPTS[@]+"${DOCO_OPTS[@]}"} "$@"; }
 find-services() { REPLY=($(RUN_JQ -r "services_matching(${1-true}) | .key" "$DOCO_CONFIG")); }
 foreach-service() {
     for REPLY in ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}; do
@@ -166,16 +162,16 @@ __compose_one() {
 }
 docker-compose-options() {
     while (($#)); do
-        printf -v REPLY 'doco.%s() { doco opt %s "$@"; }' "$1" "$1"; eval "$REPLY"; shift
+        printf -v REPLY 'doco.%s() { doco-opt %s doco "$@"; }' "$1" "$1"; eval "$REPLY"; shift
     done
 }
 
 docker-compose-optargs() {
     while (($#)); do
-        eval "doco.$1() { doco opt $1 opt \"\$@\"; }"; shift
+        eval "doco.$1() { doco-opt $1 doco-opt \"\$1\" doco \"\${@:2}\"; }"; shift
     done
 }
-doco.opt() { local DOCO_OPTS="$DOCO_OPTS $1"; doco "${@:2}"; }
+doco-opt() { local DOCO_OPTS=(${DOCO_OPTS[@]+"${DOCO_OPTS[@]}"} "$1"); "${@:2}"; }
 docker-compose-options --verbose --no-ansi --tls --tlsverify --skip-hostname-check
 docker-compose-optargs -f --file -H --host --tlscacert --tlscert --tlskey
 docker-compose-immediate() {

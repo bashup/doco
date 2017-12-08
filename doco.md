@@ -352,19 +352,15 @@ alias-exists() { fn-exists "doco-alias-$1"; }
 
 #### `compose`
 
-`compose` *args* is short for `docker-compose` *args*, except that the project directory and config files are set to the ones calculated by doco.  If `DOCO_PREFIX_OPTS` is set, it's added to the start of the command line, and if `DOCO_OPTS` is set, it's inserted before *args* but after the generated options:
+`compose` *args* is short for `docker-compose` *args*, except that the project directory and config files are set to the ones calculated by doco.  The contents of the `DOCO_OPTS` array are included before the supplied arguments:
 
 ```shell
-DOCO_PREFIX_OPTS=
-DOCO_OPTS=
-
-compose() {
-    docker-compose ${DOCO_PREFIX_OPTS-} ${DOCO_OPTS-} "$@"
-}
+DOCO_OPTS=()
+compose() { docker-compose ${DOCO_OPTS[@]+"${DOCO_OPTS[@]}"} "$@"; }
 ```
 
 ~~~shell
-    $ DOCO_PREFIX_OPTS=--tls DOCO_OPTS='-f foo' compose bar baz
+    $ (DOCO_OPTS=(--tls -f foo); compose bar baz)
     docker-compose --tls -f foo bar baz
 ~~~
 
@@ -726,21 +722,21 @@ __compose_one() {
 
 #### Generic Options
 
-Most docker-compose global options are added to the `DOCO_OPTS` variable, where they will pass through to any subcommand.
+Most docker-compose global options are added to the `DOCO_OPTS` array, where they will pass through to any subcommand.
 
 ```shell
 docker-compose-options() {
     while (($#)); do
-        printf -v REPLY 'doco.%s() { doco opt %s "$@"; }' "$1" "$1"; eval "$REPLY"; shift
+        printf -v REPLY 'doco.%s() { doco-opt %s doco "$@"; }' "$1" "$1"; eval "$REPLY"; shift
     done
 }
 
 docker-compose-optargs() {
     while (($#)); do
-        eval "doco.$1() { doco opt $1 opt \"\$@\"; }"; shift
+        eval "doco.$1() { doco-opt $1 doco-opt \"\$1\" doco \"\${@:2}\"; }"; shift
     done
 }
-doco.opt() { local DOCO_OPTS="$DOCO_OPTS $1"; doco "${@:2}"; }
+doco-opt() { local DOCO_OPTS=(${DOCO_OPTS[@]+"${DOCO_OPTS[@]}"} "$1"); "${@:2}"; }
 docker-compose-options --verbose --no-ansi --tls --tlsverify --skip-hostname-check
 docker-compose-optargs -f --file -H --host --tlscacert --tlscert --tlskey
 ```
