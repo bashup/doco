@@ -176,8 +176,8 @@ doco.--with-default() {
     if ((${#DOCO_SERVICES[@]})); then doco "${@:2}"; else with-alias "$1" doco "${@:2}"; fi
 }
 doco.--require-services() {
-    [[ ${1-} == [-+1.] ]] || loco_error "--required-services argument must be ., -, +, or 1"
-    require-services "${@:1:2}" && doco "${@:2}";
+    [[ ${1:0:1} == [-+1.] ]] || loco_error "--require-services argument must begin with ., -, +, or 1"
+    require-services $1 "$2" && doco "${@:2}";
 }
 doco.cmd() { doco --with-default cmd-default --require-services "$@"; }
 doco.cp() {

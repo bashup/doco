@@ -843,21 +843,21 @@ doco.--with-default() {
 
 #### `--require-services` *flag [subcommand args...]*
 
-This is the command-line equivalent of calling `require-services` *flag subcommand* before invoking *subcommand args...*.  That is, it checks that the relevant number of services are present and exits with a usage error if not.
+This is the command-line equivalent of calling `require-services` *flag subcommand* before invoking *subcommand args...*.  That is, it checks that the relevant number of services are present and exits with a usage error if not.  The *flag* argument can include a space and a command name to be used in place of *subcommand* in any error messages.
 
 ```shell
 doco.--require-services() {
-    [[ ${1-} == [-+1.] ]] || loco_error "--required-services argument must be ., -, +, or 1"
-    require-services "${@:1:2}" && doco "${@:2}";
+    [[ ${1:0:1} == [-+1.] ]] || loco_error "--require-services argument must begin with ., -, +, or 1"
+    require-services $1 "$2" && doco "${@:2}";
 }
 ```
 
 ~~~shell
-    $ (doco -- --require-services 1 ps)
-    no services specified for ps
+    $ (doco -- --require-services "1 somecommand" ps)
+    no services specified for somecommand
     [64]
     $ (doco -- --require-services ps)
-    --required-services argument must be ., -, +, or 1
+    --require-services argument must begin with ., -, +, or 1
     [64]
 ~~~
 
