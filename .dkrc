@@ -9,6 +9,7 @@ dk use: shell-console     # make the "console" command enter a subshell
 dk.bootstrap() {
     for f in mdsh jqmd loco realpaths; do require $f basher install bashup/$f; done
     mdsh --out "$BASHER_INSTALL_BIN/doco" --compile doco.md   # for sourcing and running by tests
+    chmod +x "$BASHER_INSTALL_BIN/doco"
 }
 
 dk.build() {
