@@ -343,6 +343,25 @@ find-services() { REPLY=($(RUN_JQ -r "services_matching(${1-true}) | .key" - <<<
     declare -a REPLY='()'
 ~~~
 
+#### `foreach-service` *cmd args...*
+
+Invoke *cmd args...* once for each service in the current service set; the service set will contain exactly one service during each invocation.
+
+```shell
+foreach-service() {
+    for REPLY in ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}; do
+        local DOCO_SERVICES=("$REPLY"); "$@"
+    done
+}
+```
+
+~~~shell
+    $ with-service "foo bar" foreach-service eval 'echo "${DOCO_SERVICES[@]}"'
+    foo
+    bar
+    $ foreach-service eval 'echo "${DOCO_SERVICES[@]}"'
+~~~
+
 #### `get-alias` *alias*
 
 Return the current value of alias *alias* as an array in `REPLY`.  Returns an empty array if the alias doesn't exist.
@@ -358,6 +377,25 @@ get-alias() { REPLY=(); ! alias-exists "$1" || "doco-alias-$1"; }
     $ get-alias nonesuch; echo ${#REPLY[@]}
     0
 ~~~
+
+#### `have-services` *[compexpr]*
+
+Return true if the current service count matches the bash numeric comparison *compexpr*; if no *compexpr* is supplied, returns true if the current service count is non-zero.
+
+```shell
+have-services() { eval "((${#DOCO_SERVICES[@]} ${1-}))"; }
+```
+
+~~~shell
+    $ with-service "a b" have-services '>1' && echo yes
+    yes
+    $ with-service "a b" have-services '>2' || echo no
+    no
+    $ have-services || echo no
+    no
+~~~
+
+
 
 #### `project-name` *[service index]*
 
@@ -918,6 +956,22 @@ doco.cp() {
     $ (doco cp foo:bar baz:spam)
     cp: only one argument may contain a :
     [64]
+~~~
+
+#### `foreach` *subcmd arg...*
+
+Execute the given `doco` subcommand once for each service in the current service set, with the service set restricted to a single service for each subcommand.  This can be useful for explicit multiple (or zero) execution of a command that is otherwise restricted in how many times it can be executed.
+
+```shell
+doco.foreach() { foreach-service doco "$@"; }
+```
+
+~~~shell
+    $ doco --with "x y" foreach ps
+    docker-compose * ps x (glob)
+    docker-compose * ps y (glob)
+
+    $ doco -- foreach ps
 ~~~
 
 #### `jq`

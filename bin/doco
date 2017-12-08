@@ -64,7 +64,13 @@ compose() {
     docker-compose ${DOCO_PREFIX_OPTS-} --project-directory "$LOCO_ROOT" -f <(echo "$DOCO_CONFIG") ${DOCO_OPTS-} "$@"
 }
 find-services() { REPLY=($(RUN_JQ -r "services_matching(${1-true}) | .key" - <<<"$DOCO_CONFIG")); }
+foreach-service() {
+    for REPLY in ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}; do
+        local DOCO_SERVICES=("$REPLY"); "$@"
+    done
+}
 get-alias() { REPLY=(); ! alias-exists "$1" || "doco-alias-$1"; }
+have-services() { eval "((${#DOCO_SERVICES[@]} ${1-}))"; }
 project-name() {
     REPLY=${COMPOSE_PROJECT_NAME-}
     [[ $REPLY ]] || realpath.basename "$LOCO_ROOT"   # default to directory name
@@ -203,6 +209,7 @@ doco.cp() {
     [[ "$seen" ]] || loco_error "cp: either source or destination must contain a :"
     docker cp $opts
 }
+doco.foreach() { foreach-service doco "$@"; }
 doco.jq() { echo "$DOCO_CONFIG" | RUN_JQ "$@"; }
 doco.sh() { doco cmd 1 exec bash "$@"; }
 { if [[ $OSTYPE != cygwin && $OSTYPE != msys && -e /dev/fd/0 ]]; then source /dev/fd/0; else source <(cat); fi; } <<'# --- EOF jqmd ---'
