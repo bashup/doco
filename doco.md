@@ -133,7 +133,12 @@ loco_loadproject() {
         source "$1"; DOCO_CONFIG="$(yaml2json - <docker-compose.yml | RUN_JQ)" ;;
     *.doco.md)
         (("$(ls *.doco.md | wc -l)" < 2)) || loco_error "Multiple doco.md files in $LOCO_ROOT"
-        set +x; run-markdown "$1";  DOCO_CONFIG="$(RUN_JQ -n)" ;;
+        local conf=$LOCO_ROOT/.doco-cache.sh
+        [[ -f "$conf" && "$(stat -c %y "$1")" == "$(stat -c %y "$conf")" ]] || (
+            unset -f mdsh:file-header mdsh:file-footer; mdsh-main --out "$conf" --compile "$1"
+            touch -r "$1" "$conf"
+        )
+        source "$conf"; DOCO_CONFIG="$(RUN_JQ -n)" ;;
     *.yaml|*.yml)
         DOCO_CONFIG="$(yaml2json - <"$1" | RUN_JQ)" ;;
     *)
@@ -145,6 +150,17 @@ loco_loadproject() {
 ```
 
 ~~~shell
+# .cache has same timestamp as what it's built from; and is rebuilt if it changes
+    $ [[ readme.doco.md -ot .doco-cache.sh || readme.doco.md -nt .doco-cache.sh ]] || echo equal
+    equal
+    $ touch -r readme.doco.md savetime; touch readme.doco.md
+    $ command doco --all
+    example1
+    $ [[ "$(stat -c %y readme.doco.md)" != "$(stat -c %y savetime)" ]] && echo changed
+    changed
+    $ [[ readme.doco.md -ot .doco-cache.sh || readme.doco.md -nt .doco-cache.sh ]] || echo equal
+    equal
+
 # There can be only one! (.doco.md file, that is)
     $ touch another.doco.md
     $ command doco
