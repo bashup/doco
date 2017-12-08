@@ -25,24 +25,47 @@ loco_preconfig() {
 }
 loco_loadproject() {
     cd "$LOCO_ROOT"; [[ ! -f .env ]] || export-dotenv .env
+    export COMPOSE_FILE=$LOCO_ROOT/.doco-cache.json COMPOSE_PATH_SEPARATOR=$'\n'
+    DOCO_CONFIG=
+
     case "$(basename "$1")" in
-    .doco)
-        source "$1"; DOCO_CONFIG="$(yaml2json - <docker-compose.yml | RUN_JQ)" ;;
     *.doco.md)
-        (("$(ls *.doco.md | wc -l)" < 2)) || loco_error "Multiple doco.md files in $LOCO_ROOT"
+        check_multi doco.md *.doco.md
         local conf=$LOCO_ROOT/.doco-cache.sh
         [[ -f "$conf" && "$(stat -c %y "$1")" == "$(stat -c %y "$conf")" ]] || (
             unset -f mdsh:file-header mdsh:file-footer; mdsh-main --out "$conf" --compile "$1"
             touch -r "$1" "$conf"
         )
-        source "$conf"; DOCO_CONFIG="$(RUN_JQ -n)" ;;
-    *.yaml|*.yml)
-        DOCO_CONFIG="$(yaml2json - <"$1" | RUN_JQ)" ;;
+        source "$conf"
+        ;;
     *)
-        loco_error "Unrecognized project file type: $1" ;;
+        compose-variants "" load_yaml
+        [[ ! -f .doco ]] || source .doco
+        ;;
     esac
-    CLEAR_FILTERS  # doing RUN_JQ in a subshell doesn't reset the current shell's state
-    find-services; ${REPLY[@]+SERVICES "${REPLY[@]}"}   # ensure SERVICES exist for all services
+
+    RUN_JQ -n >"$COMPOSE_FILE"
+    DOCO_CONFIG=$COMPOSE_FILE
+    find-services
+    ${REPLY[@]+SERVICES "${REPLY[@]}"}   # ensure SERVICES exist for all services
+}
+
+# Run a command with variants accepted by docker-compose, first checking that
+# no more than one such variant exists
+compose-variants() {
+    check_multi "docker-compose$1" "docker-compose$1.yml" "docker-compose$1.yaml"
+    "${@:2}" "docker-compose$1.yml" "docker-compose$1.yaml"
+}
+
+# Load listed YAML files as JSON, if they exist
+load_yaml() { while (($#)); do [[ ! -f "$1" ]] || JSON "$(yaml2json - <"$1")"; shift; done; }
+
+# Add a file to the COMPOSE_FILE list
+add_override() { while (($#)); do [[ ! -f "$1" ]] || COMPOSE_FILE+=$'\n'"$1"; shift; done; }
+
+# Abort if more than one given filename exists
+check_multi() {
+   (("$(ls ${@:2} 2>/dev/null | wc -l)" < 2)) || loco_error "Multiple $1 files in $LOCO_ROOT"
 }
 ALIAS() {
     local alias svc DOCO_SERVICES=()
@@ -66,9 +89,9 @@ DOCO_PREFIX_OPTS=
 DOCO_OPTS=
 
 compose() {
-    docker-compose ${DOCO_PREFIX_OPTS-} --project-directory "$LOCO_ROOT" -f <(echo "$DOCO_CONFIG") ${DOCO_OPTS-} "$@"
+    docker-compose ${DOCO_PREFIX_OPTS-} ${DOCO_OPTS-} "$@"
 }
-find-services() { REPLY=($(RUN_JQ -r "services_matching(${1-true}) | .key" - <<<"$DOCO_CONFIG")); }
+find-services() { REPLY=($(RUN_JQ -r "services_matching(${1-true}) | .key" "$DOCO_CONFIG")); }
 foreach-service() {
     for REPLY in ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}; do
         local DOCO_SERVICES=("$REPLY"); "$@"
@@ -215,7 +238,7 @@ doco.cp() {
     docker cp $opts
 }
 doco.foreach() { foreach-service doco "$@"; }
-doco.jq() { echo "$DOCO_CONFIG" | RUN_JQ "$@"; }
+doco.jq() { RUN_JQ "$@" <"$DOCO_CONFIG"; }
 doco.sh() { doco cmd 1 exec bash "$@"; }
 { if [[ $OSTYPE != cygwin && $OSTYPE != msys && -e /dev/fd/0 ]]; then source /dev/fd/0; else source <(cat); fi; } <<'# --- EOF jqmd ---'
 #!/usr/bin/env bash

@@ -128,24 +128,48 @@ Project configuration is loaded into the `DOCO_CONFIG` var as JSON text.  This m
 ```shell
 loco_loadproject() {
     cd "$LOCO_ROOT"; [[ ! -f .env ]] || export-dotenv .env
+    export COMPOSE_FILE=$LOCO_ROOT/.doco-cache.json COMPOSE_PATH_SEPARATOR=$'\n'
+    DOCO_CONFIG=
+
     case "$(basename "$1")" in
-    .doco)
-        source "$1"; DOCO_CONFIG="$(yaml2json - <docker-compose.yml | RUN_JQ)" ;;
     *.doco.md)
-        (("$(ls *.doco.md | wc -l)" < 2)) || loco_error "Multiple doco.md files in $LOCO_ROOT"
+        check_multi doco.md *.doco.md
         local conf=$LOCO_ROOT/.doco-cache.sh
         [[ -f "$conf" && "$(stat -c %y "$1")" == "$(stat -c %y "$conf")" ]] || (
             unset -f mdsh:file-header mdsh:file-footer; mdsh-main --out "$conf" --compile "$1"
             touch -r "$1" "$conf"
         )
-        source "$conf"; DOCO_CONFIG="$(RUN_JQ -n)" ;;
-    *.yaml|*.yml)
-        DOCO_CONFIG="$(yaml2json - <"$1" | RUN_JQ)" ;;
+        source "$conf"
+        ;;
     *)
-        loco_error "Unrecognized project file type: $1" ;;
+        compose-variants "" load_yaml
+        [[ ! -f .doco ]] || source .doco
+        ;;
     esac
-    CLEAR_FILTERS  # doing RUN_JQ in a subshell doesn't reset the current shell's state
-    find-services; ${REPLY[@]+SERVICES "${REPLY[@]}"}   # ensure SERVICES exist for all services
+
+    RUN_JQ -n >"$COMPOSE_FILE"
+    #DOCO_CONFIG=${COMPOSE_FILE%%$'\n'*}  # first file only
+    DOCO_CONFIG=$COMPOSE_FILE
+    find-services
+    ${REPLY[@]+SERVICES "${REPLY[@]}"}   # ensure SERVICES exist for all services
+}
+
+# Run a command with variants accepted by docker-compose, first checking that
+# no more than one such variant exists
+compose-variants() {
+    check_multi "docker-compose$1" "docker-compose$1.yml" "docker-compose$1.yaml"
+    "${@:2}" "docker-compose$1.yml" "docker-compose$1.yaml"
+}
+
+# Load listed YAML files as JSON, if they exist
+load_yaml() { while (($#)); do [[ ! -f "$1" ]] || JSON "$(yaml2json - <"$1")"; shift; done; }
+
+# Add a file to the COMPOSE_FILE list
+add_override() { while (($#)); do [[ ! -f "$1" ]] || COMPOSE_FILE+=$'\n'"$1"; shift; done; }
+
+# Abort if more than one given filename exists
+check_multi() {
+   (("$(ls ${@:2} 2>/dev/null | wc -l)" < 2)) || loco_error "Multiple $1 files in $LOCO_ROOT"
 }
 ```
 
@@ -173,7 +197,7 @@ loco_loadproject() {
     $ echo 'FILTER .
     > doco.dump() {
     >     HAVE_FILTERS || echo "cleared!"
-    >     RUN_JQ -c . <(echo "$DOCO_CONFIG");
+    >     RUN_JQ -c . <"$DOCO_CONFIG";
     > }
     > ' >.doco
     $ echo 'services: {t: {image: alpine, command: "bash -c echo test"}}' >docker-compose.yml
@@ -225,7 +249,7 @@ __mkalias() {
 
     $ ALIAS delta-xray echo gamma-zulu
     $ doco delta-xray ps
-    docker-compose * ps echo gamma-zulu (glob)
+    docker-compose ps echo gamma-zulu
     $ RUN_JQ -c -n '{} | delta_xray(.image = "test")'
     {"services":{"echo":{"image":"test"},"gamma-zulu":{"image":"test"}}}
 
@@ -233,12 +257,12 @@ __mkalias() {
 
     $ ALIAS "tango delta-xray" niner gamma-zulu
     $ doco delta-xray ps
-    docker-compose * ps echo gamma-zulu niner (glob)
+    docker-compose ps echo gamma-zulu niner
     $ RUN_JQ -c -n '{} | delta_xray(.image = "test")'
     {"services":{"echo":{"image":"test"},"gamma-zulu":{"image":"test"},"niner":{"image":"test"}}}
 
     $ doco tango ps
-    docker-compose * ps niner gamma-zulu (glob)
+    docker-compose ps niner gamma-zulu
     $ RUN_JQ -c -n '{} | tango(.image = "test")'
     {"services":{"niner":{"image":"test"},"gamma-zulu":{"image":"test"}}}
 
@@ -246,7 +270,7 @@ __mkalias() {
 
     $ ALIAS whiskey tango foxtrot
     $ doco whiskey ps
-    docker-compose * ps niner gamma-zulu foxtrot (glob)
+    docker-compose ps niner gamma-zulu foxtrot
 ~~~
 
 #### `SERVICES` *name...*
@@ -264,7 +288,7 @@ SERVICES() { for svc in "$@"; do alias-exists "$svc" || set-alias "$svc" "$svc";
 
 # command alias sets the active service set
     $ doco alfa ps
-    docker-compose * ps alfa (glob)
+    docker-compose ps alfa
 
 # jq function makes modifications to the service entry
     $ RUN_JQ -c -n '{} | foxtrot(.image = "test")'
@@ -335,13 +359,13 @@ DOCO_PREFIX_OPTS=
 DOCO_OPTS=
 
 compose() {
-    docker-compose ${DOCO_PREFIX_OPTS-} --project-directory "$LOCO_ROOT" -f <(echo "$DOCO_CONFIG") ${DOCO_OPTS-} "$@"
+    docker-compose ${DOCO_PREFIX_OPTS-} ${DOCO_OPTS-} "$@"
 }
 ```
 
 ~~~shell
     $ DOCO_PREFIX_OPTS=--tls DOCO_OPTS='-f foo' compose bar baz
-    docker-compose --tls --project-directory /*/doco.md -f /dev/fd/63 -f foo bar baz (glob)
+    docker-compose --tls -f foo bar baz
 ~~~
 
 #### `find-services` *[jq-filter]*
@@ -349,7 +373,7 @@ compose() {
 Search the docker compose configuration for `services_matching(`*jq-filter*`)`, returning their names as an array in `REPLY`.  If *jq-filter* isn't supplied, `true` is used.  (i.e., find all services.)
 
 ```shell
-find-services() { REPLY=($(RUN_JQ -r "services_matching(${1-true}) | .key" - <<<"$DOCO_CONFIG")); }
+find-services() { REPLY=($(RUN_JQ -r "services_matching(${1-true}) | .key" "$DOCO_CONFIG")); }
 ```
 
 ~~~shell
@@ -597,9 +621,9 @@ def services_matching(f): services | to_entries | .[] | select( .value | f ) ;
 ```
 
 ~~~shell
-    $ RUN_JQ -r 'services_matching(true) | .key' <<<"$DOCO_CONFIG"
+    $ RUN_JQ -r 'services_matching(true) | .key' "$DOCO_CONFIG"
     example1
-    $ RUN_JQ -r 'services_matching(.image == "bash") | .value.command' <<<"$DOCO_CONFIG"
+    $ RUN_JQ -r 'services_matching(.image == "bash") | .value.command' "$DOCO_CONFIG"
     bash -c 'echo hello world; echo'
 ~~~
 
@@ -624,9 +648,9 @@ loco_exec() {
 
 ~~~shell
     $ doco foo
-    docker-compose * foo (glob)
+    docker-compose foo
     $ (ALIAS foo bar; doco foo ps)
-    docker-compose * ps bar (glob)
+    docker-compose ps bar
     $ (ALIAS foo bar; doco foo bar)
 ~~~
 
@@ -648,7 +672,7 @@ done
         compose config "$@"
     }
     $ doco config
-    docker-compose * config (glob)
+    docker-compose config
 ~~~
 
 #### Single-Service Subcommands
@@ -659,15 +683,15 @@ Inserting the service argument at the appropriate place requires parsing the com
 
 ~~~shell
     $ doco --with x port --protocol udp 53
-    docker-compose * port --protocol udp x 53 (glob)
+    docker-compose port --protocol udp x 53
 
     $ doco --with "x y z" run -e FOO=bar foo
-    docker-compose * run -e FOO=bar x foo (glob)
-    docker-compose * run -e FOO=bar y foo (glob)
-    docker-compose * run -e FOO=bar z foo (glob)
+    docker-compose run -e FOO=bar x foo
+    docker-compose run -e FOO=bar y foo
+    docker-compose run -e FOO=bar z foo
 
     $ doco -- exec -- foo bar
-    docker-compose * exec foo bar (glob)
+    docker-compose exec foo bar
 ~~~
 
 ```shell
@@ -723,7 +747,7 @@ docker-compose-optargs -f --file -H --host --tlscacert --tlscert --tlskey
 
 ~~~shell
     $ doco -f x --verbose --tlskey blah foo
-    docker-compose * -f x --verbose --tlskey blah foo (glob)
+    docker-compose -f x --verbose --tlskey blah foo
 ~~~
 
 #### Aborting Options (--help, --version, etc.)
@@ -776,7 +800,7 @@ doco.--()   { local DOCO_SERVICES=(); doco "$@"; }
 
 ~~~shell
     $ doco --with "a b c" -- ps
-    docker-compose * ps (glob)
+    docker-compose ps
 ~~~
 
 #### `--all` *subcommand args...*
@@ -789,7 +813,7 @@ doco.--all() { doco --where true "$@"; }
 
 ~~~shell
     $ doco --all ps
-    docker-compose * ps example1 (glob)
+    docker-compose ps example1
 ~~~
 
 #### `--where` *jq-filter [subcommand args...]*
@@ -816,9 +840,9 @@ doco.--where() {
     No matching services
     [1]
     $ doco --where false ps
-    docker-compose * ps (glob)
+    docker-compose ps
     $ doco --where true ps
-    docker-compose * ps example1 (glob)
+    docker-compose ps example1
 ~~~
 
 #### `--with` *service [subcommand args...]*
@@ -834,9 +858,9 @@ At first glance, this command might appear redundant to simply adding the servic
 
 ~~~shell
     $ doco --with "a b" ps
-    docker-compose * ps a b (glob)
+    docker-compose ps a b
     $ doco --with "a b" --with c ps
-    docker-compose * ps a b c (glob)
+    docker-compose ps a b c
 ~~~
 
 #### `--with-default` *alias [subcommand args...]*
@@ -851,10 +875,10 @@ doco.--with-default() {
 
 ~~~shell
     $ doco -- --with-default alfa ps
-    docker-compose * ps alfa (glob)
+    docker-compose ps alfa
 
     $ doco foxtrot --with-default alfa ps -q
-    docker-compose * ps -q foxtrot (glob)
+    docker-compose ps -q foxtrot
 ~~~
 
 #### `--require-services` *flag [subcommand args...]*
@@ -893,7 +917,7 @@ doco.cmd() { doco --with-default cmd-default --require-services "$@"; }
     [64]
 
     $ (set-alias cmd-default foxtrot; doco cmd 1 exec testme)
-    docker-compose * exec foxtrot testme (glob)
+    docker-compose exec foxtrot testme
  ~~~
 
 #### `cp` *[opts] src dest*
@@ -984,8 +1008,8 @@ doco.foreach() { foreach-service doco "$@"; }
 
 ~~~shell
     $ doco --with "x y" foreach ps
-    docker-compose * ps x (glob)
-    docker-compose * ps y (glob)
+    docker-compose ps x
+    docker-compose ps y
 
     $ doco -- foreach ps
 ~~~
@@ -995,7 +1019,7 @@ doco.foreach() { foreach-service doco "$@"; }
 `doco jq` *args...* pipes the docker-compose configuration to `jq` *args...* as JSON.  Any functions defined via jqmd's facilities  (`DEFINES`, `IMPORTS`, `jq defs` blocks, `const` blocks, etc.) will be available to the given jq expression, if any.  If no expression is given, `.` is used.
 
 ```shell
-doco.jq() { echo "$DOCO_CONFIG" | RUN_JQ "$@"; }
+doco.jq() { RUN_JQ "$@" <"$DOCO_CONFIG"; }
 ```
 
 ~~~shell
@@ -1021,10 +1045,10 @@ doco.sh() { doco cmd 1 exec bash "$@"; }
     [64]
 
     $ doco alfa sh
-    docker-compose * exec alfa bash (glob)
+    docker-compose exec alfa bash
 
     $ (ALIAS cmd-default foxtrot; doco sh -c 'echo foo')
-    docker-compose * exec foxtrot bash -c echo\ foo (glob)
+    docker-compose exec foxtrot bash -c echo\ foo
 ~~~
 
 ## Merging jqmd and loco
