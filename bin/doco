@@ -18,6 +18,7 @@
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 loco_preconfig() {
+    export COMPOSE_PROJECT_NAME=
     LOCO_FILE=("*[-.]doco.md" ".doco" "docker-compose.yml")
     LOCO_NAME=doco
     LOCO_USER_CONFIG=$HOME/.config/doco

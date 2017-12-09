@@ -110,6 +110,7 @@ Configuration is loaded using loco.  Specifically, by searching for `*.doco.md`,
 
 ```shell
 loco_preconfig() {
+    export COMPOSE_PROJECT_NAME=
     LOCO_FILE=("*[-.]doco.md" ".doco" "docker-compose.yml")
     LOCO_NAME=doco
     LOCO_USER_CONFIG=$HOME/.config/doco
@@ -205,18 +206,21 @@ check_multi() {
     [64]
     $ rm another-doco.md
 
-# Config is loaded from .doco and docker-compose.yml if not otherwise found
+# Config is loaded from .doco and docker-compose.yml if not otherwise found;
+# COMPOSE_PROJECT_NAME is reset to empty before config runs:
     $ mkdir t; cd t
     $ echo 'FILTER .
     > doco.dump() {
     >     HAVE_FILTERS || echo "cleared!"
     >     RUN_JQ -c . <"$DOCO_CONFIG";
+    >     declare -p COMPOSE_PROJECT_NAME
     > }
     > ' >.doco
     $ echo 'services: {t: {image: alpine, command: "bash -c echo test"}}' >docker-compose.yml
-    $ command doco dump
+    $ COMPOSE_PROJECT_NAME=foo command doco dump
     cleared!
     {"services":{"t":{"command":"bash -c echo test","image":"alpine"}}}
+    declare -x COMPOSE_PROJECT_NAME=""
 
 # Must be only one docker-compose.y{a,}ml
     $ touch docker-compose.yaml
