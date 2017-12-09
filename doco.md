@@ -16,6 +16,7 @@
       - [`SERVICES` *name...*](#services-name)
       - [`VERSION` *docker-compose version*](#version-docker-compose-version)
     + [Config](#config)
+      - [`export-env` *filename*](#export-env-filename)
       - [`export-source` *filename*](#export-source-filename)
     + [Automation](#automation)
       - [`alias-exists` *name*](#alias-exists-name)
@@ -343,6 +344,36 @@ VERSION() { FILTER ".version=\"$1\""; }
 ~~~
 
 ### Config
+
+#### `export-env` *filename*
+
+Parse a docker-compose format `env_file`.  Blank and comment lines are ignored, all others are fed to `export` after stripping the leading and trailing spaces.
+
+```shell
+export-env() {
+    while IFS= read -r; do
+        REPLY="${REPLY#"${REPLY%%[![:space:]]*}"}"  # trim leading whitespace
+        REPLY="${REPLY%"${REPLY##*[![:space:]]}"}"  # trim trailing whitespace
+        [[ ! "$REPLY" || "$REPLY" == '#'* ]] || export "$REPLY"
+    done <"$1"
+}
+```
+
+~~~shell
+    $ export() { printf "export %q\n" "$@"; }   # stub
+    $ export-env /dev/stdin <<'EOF'
+    > # comment
+    >    # indented comment
+    >    THIS=$that
+    > SOME=thing = else  
+    > 
+    >  OTHER
+    > EOF
+    export THIS=\$that
+    export SOME=thing\ =\ else
+    export OTHER
+    $ unset -f export   # ditch the stub
+~~~
 
 #### `export-source` *filename*
 

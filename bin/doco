@@ -76,6 +76,13 @@ __mkalias() {
 }
 SERVICES() { for svc in "$@"; do alias-exists "$svc" || set-alias "$svc" "$svc"; done; }
 VERSION() { FILTER ".version=\"$1\""; }
+export-env() {
+    while IFS= read -r; do
+        REPLY="${REPLY#"${REPLY%%[![:space:]]*}"}"  # trim leading whitespace
+        REPLY="${REPLY%"${REPLY##*[![:space:]]}"}"  # trim trailing whitespace
+        [[ ! "$REPLY" || "$REPLY" == '#'* ]] || export "$REPLY"
+    done <"$1"
+}
 export-source() {
     local before="" after=""
     before="$(compgen -v)"; source "$@"; after="$(compgen -v)"
