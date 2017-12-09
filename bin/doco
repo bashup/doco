@@ -24,7 +24,7 @@ loco_preconfig() {
     LOCO_SITE_CONFIG=/etc/doco/config
 }
 loco_loadproject() {
-    cd "$LOCO_ROOT"; [[ ! -f .env ]] || export-dotenv .env
+    cd "$LOCO_ROOT"; [[ ! -f .env ]] || export-source .env
     export COMPOSE_FILE=$LOCO_ROOT/.doco-cache.json COMPOSE_PATH_SEPARATOR=$'\n'
     local json=$COMPOSE_FILE; DOCO_CONFIG=
 
@@ -76,7 +76,7 @@ __mkalias() {
 }
 SERVICES() { for svc in "$@"; do alias-exists "$svc" || set-alias "$svc" "$svc"; done; }
 VERSION() { FILTER ".version=\"$1\""; }
-export-dotenv() {
+export-source() {
     local before="" after=""
     before="$(compgen -v)"; source "$@"; after="$(compgen -v)"
     after="$(echo "$after" | grep -vxF -f <(echo "$before"))" || true

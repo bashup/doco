@@ -16,12 +16,14 @@
       - [`SERVICES` *name...*](#services-name)
       - [`VERSION` *docker-compose version*](#version-docker-compose-version)
     + [Config](#config)
-      - [`export-dotenv` *filename*](#export-dotenv-filename)
+      - [`export-source` *filename*](#export-source-filename)
     + [Automation](#automation)
       - [`alias-exists` *name*](#alias-exists-name)
       - [`compose`](#compose)
       - [`find-services` *[jq-filter]*](#find-services-jq-filter)
+      - [`foreach-service` *cmd args...*](#foreach-service-cmd-args)
       - [`get-alias` *alias*](#get-alias-alias)
+      - [`have-services` *[compexpr]*](#have-services-compexpr)
       - [`project-name` *[service index]*](#project-name-service-index)
       - [`require-services` *flag command-name*](#require-services-flag-command-name)
       - [`set-alias` *alias services...*](#set-alias-alias-services)
@@ -51,6 +53,7 @@
     + [doco subcommands](#doco-subcommands)
       - [`cmd` *flag subcommand...*](#cmd-flag-subcommand)
       - [`cp` *[opts] src dest*](#cp-opts-src-dest)
+      - [`foreach` *subcmd arg...*](#foreach-subcmd-arg)
       - [`jq`](#jq)
       - [`sh`](#sh)
   * [Merging jqmd and loco](#merging-jqmd-and-loco)
@@ -131,7 +134,7 @@ Either way, service aliases are created for any services that don't already have
 
 ```shell
 loco_loadproject() {
-    cd "$LOCO_ROOT"; [[ ! -f .env ]] || export-dotenv .env
+    cd "$LOCO_ROOT"; [[ ! -f .env ]] || export-source .env
     export COMPOSE_FILE=$LOCO_ROOT/.doco-cache.json COMPOSE_PATH_SEPARATOR=$'\n'
     local json=$COMPOSE_FILE; DOCO_CONFIG=
 
@@ -341,12 +344,12 @@ VERSION() { FILTER ".version=\"$1\""; }
 
 ### Config
 
-#### `export-dotenv` *filename*
+#### `export-source` *filename*
 
-`source` the specified file, exporting any variables defined by it that didn't previously exist.  Used to load the [project-level configuration](#project-level-configuration), but can also be used to load additional environment files.  (Note: the environment files are in *shell* syntax (bash syntax to be precise), *not* docker-compose syntax.  Since docker-compose gives the exported environment precedence over the contents of  `.env` files, this approach effectively allows the use of shell syntax in `.env`.
+`source` the specified file, exporting any variables defined by it that didn't previously exist.  Used to load the [project-level configuration](#project-level-configuration), but can also be used to load additional environment files.  (Note: the environment files are in *shell* syntax (bash syntax to be precise), *not* docker-compose syntax.  Since docker-compose gives the exported environment precedence over the contents of  `.env` files, this approach effectively allows the use of shell syntax in `.env`.)
 
 ```shell
-export-dotenv() {
+export-source() {
     local before="" after=""
     before="$(compgen -v)"; source "$@"; after="$(compgen -v)"
     after="$(echo "$after" | grep -vxF -f <(echo "$before"))" || true
@@ -358,7 +361,7 @@ export-dotenv() {
     $ declare -p FOO 2>/dev/null || echo undefined
     undefined
     $ echo "FOO=bar" >dummy.env
-    $ export-dotenv dummy.env
+    $ export-source dummy.env
     $ declare -p FOO 2>/dev/null || echo undefined
     declare -x FOO="bar"
 ~~~
