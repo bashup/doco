@@ -225,6 +225,9 @@ doco.cp() {
             else
                 doco --with-default shell-default --require-services 1 cp $opts "$@"; return $?
             fi
+        elif [[ $1 != /* && $1 != - ]]; then
+            # make paths relative to original run directory
+            set -- "$LOCO_PWD/$1" "${@:2}";
         fi
         printf -v opts "%s %q" "$opts" "$1"; shift
     done

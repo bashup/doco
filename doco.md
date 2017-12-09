@@ -974,6 +974,9 @@ doco.cp() {
             else
                 doco --with-default shell-default --require-services 1 cp $opts "$@"; return $?
             fi
+        elif [[ $1 != /* && $1 != - ]]; then
+            # make paths relative to original run directory
+            set -- "$LOCO_PWD/$1" "${@:2}";
         fi
         printf -v opts "%s %q" "$opts" "$1"; shift
     done
@@ -999,7 +1002,10 @@ doco.cp() {
     [64]
 
     $ (ALIAS shell-default bravo; doco cp :x y)
-    docker cp docomd_bravo_1:x y
+    docker cp docomd_bravo_1:x /*/doco.md/y (glob)
+
+    $ (ALIAS shell-default bravo; LOCO_PWD=$PWD/t doco --with bravo cp y :x)
+    docker cp /*/doco.md/t/y docomd_bravo_1:x (glob)
 
 # Bad usages
 
