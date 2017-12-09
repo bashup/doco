@@ -26,11 +26,11 @@ loco_preconfig() {
 loco_loadproject() {
     cd "$LOCO_ROOT"; [[ ! -f .env ]] || export-dotenv .env
     export COMPOSE_FILE=$LOCO_ROOT/.doco-cache.json COMPOSE_PATH_SEPARATOR=$'\n'
-    DOCO_CONFIG=
+    local json=$COMPOSE_FILE; DOCO_CONFIG=
 
     case "$(basename "$1")" in
-    *.doco.md)
-        check_multi doco.md *.doco.md
+    *[-.]doco.md)
+        check_multi doco.md *[-.]doco.md
         local conf=$LOCO_ROOT/.doco-cache.sh
         [[ -f "$conf" && "$(stat -c %y "$1")" == "$(stat -c %y "$conf")" ]] || (
             unset -f mdsh:file-header mdsh:file-footer; mdsh-main --out "$conf" --compile "$1"
@@ -39,14 +39,12 @@ loco_loadproject() {
         source "$conf"
         ;;
     *)
-        compose-variants "" load_yaml
+        compose-variants "" load_yaml; compose-variants ".override" add_override
         [[ ! -f .doco ]] || source .doco
         ;;
     esac
 
-    RUN_JQ -n >"$COMPOSE_FILE"
-    DOCO_CONFIG=$COMPOSE_FILE
-    find-services
+    RUN_JQ -c -n >"$json"; DOCO_CONFIG=$json; find-services
     ${REPLY[@]+SERVICES "${REPLY[@]}"}   # ensure SERVICES exist for all services
 }
 
@@ -54,7 +52,7 @@ loco_loadproject() {
 # no more than one such variant exists
 compose-variants() {
     check_multi "docker-compose$1" "docker-compose$1.yml" "docker-compose$1.yaml"
-    "${@:2}" "docker-compose$1.yml" "docker-compose$1.yaml"
+    "${@:2}" "$LOCO_ROOT/docker-compose$1.yml" "$LOCO_ROOT/docker-compose$1.yaml"
 }
 
 # Load listed YAML files as JSON, if they exist

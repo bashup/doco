@@ -123,17 +123,21 @@ loco_preconfig() {
 
 ### Project-Level Configuration
 
-Project configuration is loaded into the `DOCO_CONFIG` var as JSON text.  This may be done by reading it from `docker-compose.yml` or from the data and jq code embedded in a `*.doco.md` file.  If the project file is a `.doco` file, it's sourced and any jq filters in it are applied to the `docker-compose.yml`.  However the configuration is loaded, aliases are created for any services that don't already have them.
+Project configuration is loaded into `$LOCO_ROOT/.doco-cache.json` as JSON text, and `COMPOSE_FILE` is set to point to that file, for use by docker-compose.  (`COMPOSE_FILE` also gets the name of the `docker-compose.override` file, if any, with  `COMPOSE_PATH_SEPARATOR` set to a newline.)
+
+If the configuration is a `*doco.md` file, it's entirely responsible for generating the configuration, and any standard `docker-compose{.override,}.y{a,}ml` file(s) are ignored.  Otherwise, the main YAML config is read before sourcing `.doco`, and the standard files are used to source the configuration.  (Note: the `.override` file, if any, is passed to docker-compose, but is *not* included in any jq filters or queries done by doco.)
+
+Either way, service aliases are created for any services that don't already have them.  (Minus any services that are only defined in an `.override`.)
 
 ```shell
 loco_loadproject() {
     cd "$LOCO_ROOT"; [[ ! -f .env ]] || export-dotenv .env
     export COMPOSE_FILE=$LOCO_ROOT/.doco-cache.json COMPOSE_PATH_SEPARATOR=$'\n'
-    DOCO_CONFIG=
+    local json=$COMPOSE_FILE; DOCO_CONFIG=
 
     case "$(basename "$1")" in
-    *.doco.md)
-        check_multi doco.md *.doco.md
+    *[-.]doco.md)
+        check_multi doco.md *[-.]doco.md
         local conf=$LOCO_ROOT/.doco-cache.sh
         [[ -f "$conf" && "$(stat -c %y "$1")" == "$(stat -c %y "$conf")" ]] || (
             unset -f mdsh:file-header mdsh:file-footer; mdsh-main --out "$conf" --compile "$1"
@@ -142,15 +146,12 @@ loco_loadproject() {
         source "$conf"
         ;;
     *)
-        compose-variants "" load_yaml
+        compose-variants "" load_yaml; compose-variants ".override" add_override
         [[ ! -f .doco ]] || source .doco
         ;;
     esac
 
-    RUN_JQ -n >"$COMPOSE_FILE"
-    #DOCO_CONFIG=${COMPOSE_FILE%%$'\n'*}  # first file only
-    DOCO_CONFIG=$COMPOSE_FILE
-    find-services
+    RUN_JQ -c -n >"$json"; DOCO_CONFIG=$json; find-services
     ${REPLY[@]+SERVICES "${REPLY[@]}"}   # ensure SERVICES exist for all services
 }
 
@@ -158,7 +159,7 @@ loco_loadproject() {
 # no more than one such variant exists
 compose-variants() {
     check_multi "docker-compose$1" "docker-compose$1.yml" "docker-compose$1.yaml"
-    "${@:2}" "docker-compose$1.yml" "docker-compose$1.yaml"
+    "${@:2}" "$LOCO_ROOT/docker-compose$1.yml" "$LOCO_ROOT/docker-compose$1.yaml"
 }
 
 # Load listed YAML files as JSON, if they exist
@@ -174,6 +175,14 @@ check_multi() {
 ```
 
 ~~~shell
+# COMPOSE_FILE is exported, pointing to the cache; DOCO_CONFIG is the same,
+# and COMPOSE_PATH_SEPARATOR is a line break
+    $ declare -p COMPOSE_FILE DOCO_CONFIG COMPOSE_PATH_SEPARATOR
+    declare -x COMPOSE_FILE="/*/doco.md/.doco-cache.json" (glob)
+    declare -- DOCO_CONFIG="/*/doco.md/.doco-cache.json" (glob)
+    declare -x COMPOSE_PATH_SEPARATOR="
+    "
+
 # .cache has same timestamp as what it's built from; and is rebuilt if it changes
     $ [[ readme.doco.md -ot .doco-cache.sh || readme.doco.md -nt .doco-cache.sh ]] || echo equal
     equal
@@ -185,12 +194,12 @@ check_multi() {
     $ [[ readme.doco.md -ot .doco-cache.sh || readme.doco.md -nt .doco-cache.sh ]] || echo equal
     equal
 
-# There can be only one! (.doco.md file, that is)
-    $ touch another.doco.md
+# There can be only one! ([.-]doco.md file, that is)
+    $ touch another-doco.md
     $ command doco
     Multiple doco.md files in /*/doco.md (glob)
     [64]
-    $ rm another.doco.md
+    $ rm another-doco.md
 
 # Config is loaded from .doco and docker-compose.yml if not otherwise found
     $ mkdir t; cd t
@@ -204,6 +213,27 @@ check_multi() {
     $ command doco dump
     cleared!
     {"services":{"t":{"command":"bash -c echo test","image":"alpine"}}}
+
+# Must be only one docker-compose.y{a,}ml
+    $ touch docker-compose.yaml
+    $ command doco dump
+    Multiple docker-compose files in /*/doco.md/t (glob)
+    [64]
+    $ rm docker-compose.yaml
+
+# docker-compose.override.yml and docker-compose.override.yaml are included in COMPOSE_FILE
+    $ echo 'doco.dump() { declare -p COMPOSE_FILE; }' >.doco
+    $ command doco dump
+    declare -x COMPOSE_FILE="/*/doco.md/t/.doco-cache.json" (glob)
+    $ touch docker-compose.override.yml; command doco dump
+    declare -x COMPOSE_FILE="/*/doco.md/t/.doco-cache.json (glob)
+    /*/doco.md/t/docker-compose.override.yml" (glob)
+    $ touch docker-compose.override.yaml; command doco dump
+    Multiple docker-compose.override files in /*/doco.md/t (glob)
+    [64]
+    $ rm docker-compose.override.yml; command doco dump
+    declare -x COMPOSE_FILE="/*/doco.md/t/.doco-cache.json (glob)
+    /*/doco.md/t/docker-compose.override.yaml" (glob)
 
 # .env file is auto-loaded
     $ echo "FOO=bazbar" >.env
