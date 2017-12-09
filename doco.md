@@ -806,12 +806,12 @@ docker-compose-optargs() {
 }
 doco-opt() { local DOCO_OPTS=(${DOCO_OPTS[@]+"${DOCO_OPTS[@]}"} "$1"); "${@:2}"; }
 docker-compose-options --verbose --no-ansi --tls --tlsverify --skip-hostname-check
-docker-compose-optargs -f --file -H --host --tlscacert --tlscert --tlskey
+docker-compose-optargs -H --host --tlscacert --tlscert --tlskey
 ```
 
 ~~~shell
-    $ doco -f x --verbose --tlskey blah foo
-    docker-compose -f x --verbose --tlskey blah foo
+    $ doco --verbose --tlskey blah foo
+    docker-compose --verbose --tlskey blah foo
 ~~~
 
 #### Aborting Options (--help, --version, etc.)
@@ -825,7 +825,7 @@ docker-compose-immediate() {
 docker-compose-immediate -h --help -v --version
 ```
 ~~~shell
-    $ doco -f x --help --verbose something blah
+    $ doco --help --verbose something blah
     docker-compose --help --verbose something blah
 ~~~
 
@@ -835,12 +835,18 @@ Project level options are fixed and can't be changed via the command line.
 
 ```shell
 doco.-p() { loco_error "You must use COMPOSE_PROJECT_NAME to set the project name."; }
+doco.-f() { loco_error "doco does not support -f and --file."; }
+doco.--file() { doco -f "$@"; }
 doco.--project-name() { doco -p "$@"; }
 doco.--project-directory() { loco_error "doco: --project-directory cannot be overridden"; }
 ```
 
 ~~~shell
-    $ (doco -f x --verbose -p blah foo)
+    $ (doco --file x)
+    doco does not support -f and --file.
+    [64]
+
+    $ (doco --verbose -p blah foo)
     You must use COMPOSE_PROJECT_NAME to set the project name.
     [64]
 
