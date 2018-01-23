@@ -25,6 +25,7 @@
       - [`foreach-service` *cmd args...*](#foreach-service-cmd-args)
       - [`get-alias` *alias*](#get-alias-alias)
       - [`have-services` *[compexpr]*](#have-services-compexpr)
+      - [`include` *markdownfile [cachefile]*](#include-markdownfile-cachefile)
       - [`project-name` *[service index]*](#project-name-service-index)
       - [`require-services` *flag command-name*](#require-services-flag-command-name)
       - [`set-alias` *alias services...*](#set-alias-alias-services)
@@ -143,12 +144,7 @@ loco_loadproject() {
     case "$(basename "$1")" in
     *[-.]doco.md)
         check_multi doco.md *[-.]doco.md
-        local conf=$LOCO_ROOT/.doco-cache.sh
-        [[ -f "$conf" && "$(stat -c %y "$1")" == "$(stat -c %y "$conf")" ]] || (
-            unset -f mdsh:file-header mdsh:file-footer; mdsh-main --out "$conf" --compile "$1"
-            touch -r "$1" "$conf"
-        )
-        source "$conf"
+        include "$1" "$LOCO_ROOT/.doco-cache.sh"
         ;;
     *)
         compose-variants "" load_yaml; compose-variants ".override" add_override
@@ -499,7 +495,21 @@ have-services() { eval "((${#DOCO_SERVICES[@]} ${1-}))"; }
     no
 ~~~
 
+#### `include` *markdownfile [cachefile]*
 
+Source the mdsh compilation  of the specified markdown file, saving it in *cachefile* first.  If *cachefile* exists and has the same timestamp as *markdownfile*, *cachefile* is sourced without compiling.  If no *cachefile* is given, compilation is done to a temporary file.
+
+```shell
+include() {
+    local conf=${2-$(mktmp)}
+    [[ -f "$conf" && "$(stat -c %y "$1")" == "$(stat -c %y "$conf")" ]] || (
+        unset -f mdsh:file-header mdsh:file-footer
+        mdsh-main --out "$conf" --compile "$1"
+        touch -r "$1" "$conf"
+    )
+    source "$conf"
+}
+```
 
 #### `project-name` *[service index]*
 

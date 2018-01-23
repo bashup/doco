@@ -32,12 +32,7 @@ loco_loadproject() {
     case "$(basename "$1")" in
     *[-.]doco.md)
         check_multi doco.md *[-.]doco.md
-        local conf=$LOCO_ROOT/.doco-cache.sh
-        [[ -f "$conf" && "$(stat -c %y "$1")" == "$(stat -c %y "$conf")" ]] || (
-            unset -f mdsh:file-header mdsh:file-footer; mdsh-main --out "$conf" --compile "$1"
-            touch -r "$1" "$conf"
-        )
-        source "$conf"
+        include "$1" "$LOCO_ROOT/.doco-cache.sh"
         ;;
     *)
         compose-variants "" load_yaml; compose-variants ".override" add_override
@@ -101,6 +96,15 @@ foreach-service() {
 }
 get-alias() { REPLY=(); ! alias-exists "$1" || "doco-alias-$1"; }
 have-services() { eval "((${#DOCO_SERVICES[@]} ${1-}))"; }
+include() {
+    local conf=${2-$(mktmp)}
+    [[ -f "$conf" && "$(stat -c %y "$1")" == "$(stat -c %y "$conf")" ]] || (
+        unset -f mdsh:file-header mdsh:file-footer
+        mdsh-main --out "$conf" --compile "$1"
+        touch -r "$1" "$conf"
+    )
+    source "$conf"
+}
 project-name() {
     REPLY=${COMPOSE_PROJECT_NAME-}
     [[ $REPLY ]] || realpath.basename "$LOCO_ROOT"   # default to directory name
