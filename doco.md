@@ -164,7 +164,7 @@ compose-variants() {
 }
 
 # Load listed YAML files as JSON, if they exist
-load_yaml() { while (($#)); do [[ ! -f "$1" ]] || JSON "$(yaml2json - <"$1")"; shift; done; }
+load_yaml() { while (($#)); do [[ ! -f "$1" ]] || JSON "$(yaml2json /dev/stdin <"$1")"; shift; done; }
 
 # Add a file to the COMPOSE_FILE list
 add_override() { while (($#)); do [[ ! -f "$1" ]] || COMPOSE_FILE+=$'\n'"$1"; shift; done; }
@@ -949,7 +949,7 @@ Invoke `doco` *subcommand args...*, adding *alias* to the current service set if
 
 ```shell
 doco.--with-default() {
-    if ((${#DOCO_SERVICES[@]})); then doco "${@:2}"; else with-alias "$1" doco "${@:2}"; fi
+    if have-services; then doco "${@:2}"; else with-alias "$1" doco "${@:2}"; fi
 }
 ```
 
