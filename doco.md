@@ -137,7 +137,7 @@ Either way, service aliases are created for any services that don't already have
 
 ```shell
 loco_loadproject() {
-    cd "$LOCO_ROOT"; [[ ! -f .env ]] || export-source .env
+    cd "$LOCO_ROOT"; [[ ! -f .env ]] || export-env .env
     export COMPOSE_FILE=$LOCO_ROOT/.doco-cache.json COMPOSE_PATH_SEPARATOR=$'\n'
     local json=$COMPOSE_FILE; DOCO_CONFIG=
 
@@ -239,12 +239,12 @@ check_multi() {
     declare -x COMPOSE_FILE="/*/doco.md/t/.doco-cache.json (glob)
     /*/doco.md/t/docker-compose.override.yaml" (glob)
 
-# .env file is auto-loaded
-    $ echo "FOO=bazbar" >.env
+# .env file is auto-loaded, using docker-compose .env syntax
+    $ echo "FOO=baz'bar" >.env
     $ echo 'doco.dump() { echo "${DOCO_SERVICES[@]}"; echo "$FOO"; }' >.doco
     $ command doco t dump
     t
-    bazbar
+    baz'bar
 
 # Back to the test root
     $ cd ..
@@ -347,7 +347,9 @@ VERSION() { FILTER ".version=\"$1\""; }
 
 #### `export-env` *filename*
 
-Parse a docker-compose format `env_file`.  Blank and comment lines are ignored, all others are fed to `export` after stripping the leading and trailing spaces.
+Parse a docker-compose format `env_file`, exporting the variables found therein.  Used to load the [project-level configuration](#project-level-configuration), but can also be used to load additional environment files.
+
+Blank and comment lines are ignored, all others are fed to `export` after stripping the leading and trailing spaces.  The file should not use quoting, or shell escaping: the exact contents of a line after the `=` (minus trailing spaces) are used as the variable's contents.
 
 ```shell
 export-env() {
@@ -377,7 +379,7 @@ export-env() {
 
 #### `export-source` *filename*
 
-`source` the specified file, exporting any variables defined by it that didn't previously exist.  Used to load the [project-level configuration](#project-level-configuration), but can also be used to load additional environment files.  (Note: the environment files are in *shell* syntax (bash syntax to be precise), *not* docker-compose syntax.  Since docker-compose gives the exported environment precedence over the contents of  `.env` files, this approach effectively allows the use of shell syntax in `.env`.)
+`source` the specified file, exporting any variables defined by it that didn't previously exist.  (Note: the environment files are in *shell* syntax (bash syntax to be precise), *not* docker-compose syntax.)
 
 ```shell
 export-source() {
