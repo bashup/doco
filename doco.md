@@ -116,15 +116,17 @@ loco_preconfig() {
     LOCO_NAME=doco
     LOCO_USER_CONFIG=$HOME/.config/doco
     LOCO_SITE_CONFIG=/etc/doco/config
+    DOCO_PROFILE=
 }
 ```
 
 ~~~shell
-    $ declare -p LOCO_FILE LOCO_NAME LOCO_USER_CONFIG LOCO_SITE_CONFIG
+    $ declare -p LOCO_FILE LOCO_NAME LOCO_USER_CONFIG LOCO_SITE_CONFIG DOCO_PROFILE
     declare -a LOCO_FILE='([0]="*[-.]doco.md" [1]=".doco" [2]="docker-compose.yml")'
     declare -- LOCO_NAME="doco"
     declare -- LOCO_USER_CONFIG="/*/.config/doco" (glob)
     declare -- LOCO_SITE_CONFIG="/etc/doco/config"
+    declare -- DOCO_PROFILE=""
 ~~~
 
 ### Project-Level Configuration
@@ -152,6 +154,7 @@ loco_loadproject() {
         ;;
     esac
 
+    eval "$DOCO_PROFILE"  # allow overriding the final configuration
     RUN_JQ -c -n >"$json"; DOCO_CONFIG=$json; find-services
     ${REPLY[@]+SERVICES "${REPLY[@]}"}   # ensure SERVICES exist for all services
 }
@@ -239,10 +242,11 @@ check_multi() {
     declare -x COMPOSE_FILE="/*/doco.md/t/.doco-cache.json (glob)
     /*/doco.md/t/docker-compose.override.yaml" (glob)
 
-# .env file is auto-loaded, using docker-compose .env syntax
-    $ echo "FOO=baz'bar" >.env
+# .env file is auto-loaded, using docker-compose .env syntax, running DOCO_PROFILE
+    $ { echo "FOO=baz'bar"; echo "DOCO_PROFILE=echo hi!"; } >.env
     $ echo 'doco.dump() { echo "${DOCO_SERVICES[@]}"; echo "$FOO"; }' >.doco
     $ command doco t dump
+    hi!
     t
     baz'bar
 
