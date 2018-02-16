@@ -508,11 +508,7 @@ Source the mdsh compilation  of the specified markdown file, saving it in *cache
 ```shell
 include() {
     local conf=${2-$(mktmp)}
-    [[ -f "$conf" && "$(stat -c %y "$1")" == "$(stat -c %y "$conf")" ]] || (
-        unset -f mdsh:file-header mdsh:file-footer
-        mdsh-main --out "$conf" --compile "$1"
-        touch -r "$1" "$conf"
-    )
+    mdsh-make "$1" "$conf" unset -f mdsh:file-header mdsh:file-footer
     source "$conf"
 }
 ```
