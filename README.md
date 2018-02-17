@@ -8,7 +8,7 @@ In addition to letting you create custom commands and apply them to a configurat
 
 doco is a mashup of [loco](https://github.com/bashup/loco) (for project configuration and subcommands) and [jqmd](https://github.com/bashup/jqmd) (for literate programming and jq support).  You can install it with [basher](https://github.com/basherpm/basher) (i.e. via `basher install bashup/doco`), or just copy the [binary](bin/doco) to a directory on your `PATH`.  You will need [jq](http://stedolan.github.io/jq/) and docker-compose on your `PATH` as well, along with either PyYAML or a yaml2json command (such as [this one](https://github.com/bronze1man/yaml2json)).
 
-In its simplest use, doco can be used to add custom commands to an existing docker-compose project: just create a `.doco` file alongside your `docker-compose.yml`, and define bash functions in it using the [doco API](doco.md#api) and [predefined commands](doco.md#commands).  A function named `doco.X` will define a doco subcommand `X`.
+In its simplest use, doco can be used to add custom commands to an existing docker-compose project: just create a `.doco` file alongside your `docker-compose.yml`, and define bash functions in it using the [doco API](doco.md#api) and [CLI](doco.md#command-line-interface).  A function named `doco.X` will define a doco subcommand `X`.
 
 ## Literate DevOps
 
@@ -23,6 +23,7 @@ To create a new project, just make a file whose name ends in `.doco.md`, e.g.:
 In that file, you can intermix docker-compose YAML blocks, `jq` code, and shell script to define your configuration and custom commands, like so:
 
 ```yaml
+# A `yaml` block defining some configuration
 version: "2.1"
 services:
   example1:
@@ -30,11 +31,12 @@ services:
 ```
 
 ```jq
-# A jq filter that alters the supplied YAML
+# A `jq` block defining some filter code that alters the supplied YAML
 .services.example1.command = "bash -c 'echo hello world; echo'"
 ```
 
 ```shell
+# A `shell` block defining a new doco subcommand
 doco.example() { echo "this is an example command"; }
 ```
 
@@ -50,7 +52,13 @@ Your commands and containers can then be used on the command line:
 
 Your project document can include as many `shell`, `yaml`, and `jq` blocks as you like.  `yaml` and `jq` blocks are processed in order, with the `yaml` being treated as if it were a jq filter assigning the contents of the block. The project document is processed using [jqmd](https://github.com/bashup/jqmd), so all of the languages and metaprogramming tricks of both jqmd and [mdsh](https://github.com/bashup/mdsh) are supported.  (You can define jq functions in `jq defs` blocks, for example, or generate code using `mdsh` blocks.)
 
-Of course, you won't want to put sensitive data directly in your project document.  So, just like with docker-compose, you can use an `.env` file.  The only difference is that when you use doco instead of docker-compose, your `.env` file can use full shell syntax, not just the restricted `key=unquoted-value` used by docker-compose.
+Of course, you won't want to put sensitive data directly in your project document.  So, just like with docker-compose, you can use an `.env` file.
 
-You're also not limited to just the contents of your main project document to do configuration.  The shell code embedded in your project document can use [export-source](doco.md#export-source-filename) to process additional `.env` files, or [run-markdown](https://github.com/bashup/mdsh#available-functions) to source other markdown documents with the same syntax.  This can be useful for projects that want to be extensible, where a user can define local extension documents alongside a main project document that's kept in revision control.
+You're also not limited to just the contents of your main project document to do configuration.  The shell code embedded in your project document can use [export-env](doco.md#export-env-filename) to process additional docker-compose format `.env` files, or [include](include-markdownfile-cachefile) to source other markdown documents with the same syntax.  This can be useful for projects that want to be extensible, where a user can define local extension documents alongside a main project document that's kept in revision control.
+
+### Caching
+
+`doco` uses various caches to speed up its operation, and must therefore have write access to your project's root directory.  Currently, the cache files are `.doco-cache.json` (which contains your project's generated configuration in JSON format) and `.doco-cache.sh` (which contains the compiled version of your `*.doco.md` file, if applicable).
+
+If you're using `include` to load other markdown files, you can cache their compiled contents by passing a second argument to `include`, naming the file to save the compiled version in.  Generally speaking, this should be a path beginning with `./`, which will be interpreted relative to the project root.  Like the `.doco-cache.sh` file, these files will only be regenerated if the source file's timestamp changes.
 

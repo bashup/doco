@@ -1117,7 +1117,7 @@ doco.jq() { RUN_JQ "$@" <"$DOCO_CONFIG"; }
 
 #### `sh`
 
-`doco sh` *args...* executes `bash` *args* in the specified service's container.  If no service is specified, it defaults to the `shell-default` alias.  Multiple services are not allowed.
+`doco sh` *args...* executes `bash` *args* in the specified service's container.  If no service is specified, it defaults to the `cmd-default` alias.  Multiple services are not allowed.
 
 ```shell
 doco.sh() { doco cmd 1 exec bash "$@"; }
