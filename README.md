@@ -58,7 +58,7 @@ You're also not limited to just the contents of your main project document to do
 
 ### Caching
 
-`doco` uses various caches to speed up its operation, and must therefore have write access to your project's root directory.  Currently, the cache files are `.doco-cache.json` (which contains your project's generated configuration in JSON format) and `.doco-cache.sh` (which contains the compiled version of your `*.doco.md` file, if applicable).
+`doco` uses various caches to speed up its operation, and must therefore have write access to your project's root directory.  Currently, the main cache files are `.doco-cache.json` (which contains your project's generated configuration in JSON format) and `.doco-cache.sh` (which contains the compiled version of your `*.doco.md` file, if applicable).
 
-If you're using `include` to load other markdown files, you can cache their compiled contents by passing a second argument to `include`, naming the file to save the compiled version in.  Generally speaking, this should be a path beginning with `./`, which will be interpreted relative to the project root.  Like the `.doco-cache.sh` file, these files will only be regenerated if the source file's timestamp changes.
+If you're using `include` to load other markdown files, they will be cached in a file under `.doco-cache/includes/`, unless you pass a second argument to  `include`, naming the file to save the compiled version in.  (Generally speaking, this should be a path beginning with `./`, which will be interpreted relative to the project root.)  Like the `.doco-cache.sh` file, cached include files will only be regenerated if the source file's timestamp changes.
 

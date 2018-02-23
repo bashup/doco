@@ -503,13 +503,31 @@ have-services() { eval "((${#DOCO_SERVICES[@]} ${1-}))"; }
 
 #### `include` *markdownfile [cachefile]*
 
-Source the mdsh compilation  of the specified markdown file, saving it in *cachefile* first.  If *cachefile* exists and has the same timestamp as *markdownfile*, *cachefile* is sourced without compiling.  If no *cachefile* is given, compilation is done to a temporary file.
+Source the mdsh compilation  of the specified markdown file, saving it in *cachefile* first.  If *cachefile* exists and has the same timestamp as *markdownfile*, *cachefile* is sourced without compiling.  If no *cachefile* is given, compilation is done to a file under `.doco-cache/includes`.
 
 ```shell
 include() {
-    local conf=${2-$(mktmp)}
+    local conf=${2-}
+    if [[ ! "$conf" ]]; then
+        getsum "$1"; conf=.doco-cache/includes/$REPLY
+        mkdir -p .doco-cache/includes
+    fi
     mdsh-make "$1" "$conf" unset -f mdsh:file-header mdsh:file-footer
     source "$conf"
+}
+
+getsum() {
+    # Set REPLY to the sha1 or md5 sum of "$1"
+    if IFS=$'\n' eval 'REPLY=($(command -v sha1sum md5sum md5 openssl))'; then
+        for REPLY in "${REPLY[@]}"; do case "${REPLY##*/}" in
+            sha1sum) getsum() { REPLY=($(printf %s "$1" | sha1sum)); }; break ;;
+            md5sum)  getsum() { REPLY=($(printf %s "$1" | md5sum)); }; break ;;
+            md5)     getsum() { REPLY=$(md5 -qs "$1"); }; break ;;
+            openssl) getsum() { set -- $(printf %s "$1" | openssl sha1); REPLY=${!#}; } ;;
+        esac; done
+        getsum "$@"
+    else loco_error "No checksum tools available"
+    fi
 }
 ```
 
