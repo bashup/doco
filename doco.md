@@ -143,7 +143,7 @@ loco_loadproject() {
     export COMPOSE_FILE=$LOCO_ROOT/.doco-cache.json COMPOSE_PATH_SEPARATOR=$'\n'
     local json=$COMPOSE_FILE; DOCO_CONFIG=
 
-    case "$(basename "$1")" in
+    realpath.basename "$1"; case "$REPLY" in
     *[-.]doco.md)
         check_multi doco.md *[-.]doco.md
         include "$1" "$LOCO_ROOT/.doco-cache.sh"
@@ -507,13 +507,13 @@ Source the mdsh compilation  of the specified markdown file, saving it in *cache
 
 ```shell
 include() {
-    local conf=${2-}
-    if [[ ! "$conf" ]]; then
-        getsum "$1"; conf=.doco-cache/includes/$REPLY
-        mkdir -p .doco-cache/includes
+    if [[ ! "${2-}" ]]; then
+        local includes=$LOCO_ROOT/.doco-cache/includes
+        getsum "$1"; set -- "$1" "$includes/$REPLY"
+        [[ -d "$includes" ]] || mkdir -p $includes
     fi
-    mdsh-make "$1" "$conf" unset -f mdsh:file-header mdsh:file-footer
-    source "$conf"
+    mdsh-make "$1" "$2" unset -f mdsh:file-header mdsh:file-footer
+    source "$2"
 }
 
 getsum() {
@@ -526,7 +526,7 @@ getsum() {
             openssl) getsum() { set -- $(printf %s "$1" | openssl sha1); REPLY=${!#}; } ;;
         esac; done
         getsum "$@"
-    else loco_error "No checksum tools available"
+    else loco_error "No checksum tools available: need sha1sum, md5sum, md5, or openssl"
     fi
 }
 ```
