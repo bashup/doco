@@ -68,7 +68,7 @@ doco is a project automation tool for doing literate devops with docker-compose.
 
 The main program begins with a `#!` line and edit warning:
 
-```shell
+```shell main
 #!/usr/bin/env bash
 # ---
 # This file was automatically generated from doco.md - DO NOT EDIT!
@@ -77,7 +77,7 @@ The main program begins with a `#!` line and edit warning:
 
 Followed by its license text:
 
-```shell mdsh
+```shell mdsh main
 # incorporate the LICENSE file as bash comments
 source realpaths; realpath.location "$MDSH_SOURCE"
 echo; sed -e '1,2d; s/^\(.\)/# \1/; s/^$/#/;' "$REPLY/LICENSE"; echo
