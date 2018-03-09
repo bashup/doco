@@ -71,6 +71,7 @@ The main program begins with a `#!` line and edit warning, followed by its licen
 ```shell mdsh
 @module doco.md
 @import pjeby/license @comment LICENSE
+@main loco_main
 ```
 
 And for our tests, we source this file and set up some testing tools:
@@ -1159,9 +1160,4 @@ done
 ```shell
 DEFINE "${mdsh_raw_jq_api[*]}"
 mdsh-error() { printf -v REPLY "$1\n" "${@:2}"; loco_error "$REPLY"; }
-```
-Last, but not least, we run the main program, if we're the main program:
-
-```shell mdsh
-@main loco_main
 ```
