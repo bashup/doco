@@ -70,7 +70,7 @@ The main program begins with a `#!` line and edit warning, followed by its licen
 
 ```shell mdsh
 @module doco.md
-@comment LICENSE
+@import pjeby/license @comment LICENSE
 ```
 
 And for our tests, we source this file and set up some testing tools:
