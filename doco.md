@@ -32,7 +32,6 @@
       - [`with-alias` *alias command...*](#with-alias-alias-command)
       - [`with-service` *service(s) command...*](#with-service-services-command)
     + [jq API](#jq-api)
-      - [`jqmd_data($data)`](#jqmd_datadata)
       - [`services`](#services)
       - [`services_matching(filter)`](#services_matchingfilter)
   * [Docker-Compose Integration](#docker-compose-integration)
@@ -651,34 +650,6 @@ with-service() {
 
 
 ### jq API
-
-#### `jqmd_data($data)`
-
-The `jqmd_data()` function is used to combine YAML or JSON blocks found in a project's configuration file.  Currently, it's defined as a recursive addition of dictionaries that also does addition of arrays.  This generally does the right thing to assemble docker-compose configuration, so long as you're consistent in using dictionaries or arrays for a given setting.
-
-```jq api
-def jqmd_data($data): . as $orig |
-    reduce paths(type=="array") as $path (
-        (. // {}) * $data; setpath( $path; ($orig | getpath($path)) + ($data | getpath($path)) )
-    );
-```
-
-~~~shell
-    $ RUN_JQ -n '{a: "b", c: {d: [1, 2]}} | jqmd_data( {c: {e: {f: "G"}, d: [27] }} )'
-    {
-      "a": "b",
-      "c": {
-        "d": [
-          1,
-          2,
-          27
-        ],
-        "e": {
-          "f": "G"
-        }
-      }
-    }
-~~~
 
 #### `services`
 
