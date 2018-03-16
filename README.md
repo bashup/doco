@@ -6,7 +6,7 @@ In addition to letting you create custom commands and apply them to a configurat
 
 ## Basic Use
 
-doco is a mashup of [loco](https://github.com/bashup/loco) (for project configuration and subcommands) and [jqmd](https://github.com/bashup/jqmd) (for literate programming and jq support).  You can install it with [basher](https://github.com/basherpm/basher) (i.e. via `basher install bashup/doco`), or just copy the [binary](bin/doco) to a directory on your `PATH`.  You will need [jq](http://stedolan.github.io/jq/) and docker-compose on your `PATH` as well, along with either PyYAML or a yaml2json command (such as [this one](https://github.com/bronze1man/yaml2json)).
+doco is a mashup of [loco](https://github.com/bashup/loco) (for project configuration and subcommands) and [jqmd](https://github.com/bashup/jqmd) (for literate programming and jq support).  You can install it with [basher](https://github.com/basherpm/basher) (i.e. via `basher install bashup/doco`), or just copy the [binary](bin/doco) to a directory on your `PATH`.  You will need [jq](http://stedolan.github.io/jq/) and docker-compose on your `PATH` as well, along with either a yaml2json command (such as [this one](https://github.com/bronze1man/yaml2json)), PyYAML, or the YAML extension for PHP.
 
 In its simplest use, doco can be used to add custom commands to an existing docker-compose project: just create a `.doco` file alongside your `docker-compose.yml`, and define bash functions in it using the [doco API](doco.md#api) and [CLI](doco.md#command-line-interface).  A function named `doco.X` will define a doco subcommand `X`.
 
