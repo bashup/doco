@@ -102,27 +102,14 @@ get-alias() { REPLY=(); ! alias-exists "$1" || "doco-alias-$1"; }
 have-services() { eval "((${#DOCO_SERVICES[@]} ${1-}))"; }
 include() {
     if [[ ! "${2-}" ]]; then
-        local includes=$LOCO_ROOT/.doco-cache/includes
-        getsum "$1"; set -- "$1" "$includes/$REPLY"
-        [[ -d "$includes" ]] || mkdir -p $includes
+        mdsh-cache "$LOCO_ROOT/.doco-cache/includes" "$1" "" pre-include
+        source "$REPLY"
+    else
+        mdsh-make "$1" "$2" pre-include; source "$2"
     fi
-    mdsh-make "$1" "$2" unset -f mdsh:file-header mdsh:file-footer
-    source "$2"
 }
 
-getsum() {
-    # Set REPLY to the sha1 or md5 sum of "$1"
-    if IFS=$'\n' eval 'REPLY=($(command -v sha1sum md5sum md5 openssl))'; then
-        for REPLY in "${REPLY[@]}"; do case "${REPLY##*/}" in
-            sha1sum) getsum() { REPLY=($(printf %s "$1" | sha1sum)); }; break ;;
-            md5sum)  getsum() { REPLY=($(printf %s "$1" | md5sum)); }; break ;;
-            md5)     getsum() { REPLY=$(md5 -qs "$1"); }; break ;;
-            openssl) getsum() { set -- $(printf %s "$1" | openssl sha1); REPLY=${!#}; } ;;
-        esac; done
-        getsum "$@"
-    else loco_error "No checksum tools available: need sha1sum, md5sum, md5, or openssl"
-    fi
-}
+pre-include() { unset -f mdsh:file-header mdsh:file-footer; }
 project-name() {
     REPLY=${COMPOSE_PROJECT_NAME-}
     [[ $REPLY ]] || realpath.basename "$LOCO_ROOT"   # default to directory name
@@ -473,9 +460,18 @@ fstamp() {
 } 2>/dev/null
 
 mdsh-make() {
-    [[ -f "$2" && "$(fstamp "$1")" == "$(fstamp "$2")" ]] || {
+    [[ -f "$1" && -f "$2" && "$(fstamp "$1")" == "$(fstamp "$2")" ]] || {
         ( "${@:3}" && mdsh-main --out "$2" --compile "$1" ) && touch -r "$1" "$2"
     }
+}
+mdsh-cache() {
+    [[ -d "$1" ]] || mkdir -p "$1"
+    flatname "${3:-$2}"; mdsh-make "$2" "$1/$REPLY" "${@:4}"
+}
+
+flatname() {
+    REPLY="${1//"%"/"%25"}"; REPLY="${REPLY//"/"/"%2F"}"; REPLY="${REPLY/#./"%2E"}"
+    REPLY="${REPLY//'\'/%5C}"
 }
 # run-markdown file args...
 # Compile `file` and source the result, passing along any positional arguments

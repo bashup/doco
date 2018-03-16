@@ -498,27 +498,14 @@ Source the mdsh compilation  of the specified markdown file, saving it in *cache
 ```shell
 include() {
     if [[ ! "${2-}" ]]; then
-        local includes=$LOCO_ROOT/.doco-cache/includes
-        getsum "$1"; set -- "$1" "$includes/$REPLY"
-        [[ -d "$includes" ]] || mkdir -p $includes
+        mdsh-cache "$LOCO_ROOT/.doco-cache/includes" "$1" "" pre-include
+        source "$REPLY"
+    else
+        mdsh-make "$1" "$2" pre-include; source "$2"
     fi
-    mdsh-make "$1" "$2" unset -f mdsh:file-header mdsh:file-footer
-    source "$2"
 }
 
-getsum() {
-    # Set REPLY to the sha1 or md5 sum of "$1"
-    if IFS=$'\n' eval 'REPLY=($(command -v sha1sum md5sum md5 openssl))'; then
-        for REPLY in "${REPLY[@]}"; do case "${REPLY##*/}" in
-            sha1sum) getsum() { REPLY=($(printf %s "$1" | sha1sum)); }; break ;;
-            md5sum)  getsum() { REPLY=($(printf %s "$1" | md5sum)); }; break ;;
-            md5)     getsum() { REPLY=$(md5 -qs "$1"); }; break ;;
-            openssl) getsum() { set -- $(printf %s "$1" | openssl sha1); REPLY=${!#}; } ;;
-        esac; done
-        getsum "$@"
-    else loco_error "No checksum tools available: need sha1sum, md5sum, md5, or openssl"
-    fi
-}
+pre-include() { unset -f mdsh:file-header mdsh:file-footer; }
 ```
 
 #### `project-name` *[service index]*
