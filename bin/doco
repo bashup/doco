@@ -261,8 +261,8 @@ mdsh_raw_bash_runtime+=($'JQOPTS=(jq)\nJQ_OPTS() { JQOPTS+=("$@"); }\nARG()     
 mdsh_raw_bash_runtime+=($'RUN_JQ() {\n    local opt nargs cmd=(jq); set -- "${JQOPTS[@]:1}" "$@"\n\n    while (($#)); do\n        case "$1" in\n        -{f,-fromfile})                     nargs=2 ; FILTER "$(<"$2")" ;;\n        -{L,-indent})                       nargs=2 ;;\n        --{arg,arjgson,slurpfile,argfile})  nargs=3 ;;\n        --)  break   ;; # rest of args are data files\n        -*)  nargs=1 ;;\n        *)   FILTER "$1"; break ;; # jq program: data files follow\n        esac\n        cmd+=("${@:1:$nargs}")    # add $nargs args to cmd\n        shift $nargs\n    done\n\n    HAVE_FILTERS || FILTER .    # jq needs at least one filter expression\n\n    "${cmd[@]}" -f <(\n        printf "%s\\n" "${jqmd_imports-}" "${jqmd_defines-}" "${jqmd_filters-}"\n    ) "${@:2}"\n\n    CLEAR_FILTERS   # cleanup for any re-runs\n}\n')
 mdsh_raw_bash_runtime+=($'jqmd_data=jqmd::data\n@data() { jqmd_data="${1-}"; }\n\nYAML()  { y2j "$1"; JSON "$REPLY"; }\nJSON()  { FILTER "$jqmd_data($1)"; }\n')
 mdsh_raw_bash_runtime+=($'DEFINE \'\ndef jqmd::blend($other; combine): . as $this | . *  $other | . as $combined | with_entries(\n  if (.key | in($this)) and (.key | in($other)) then\n    .this = $this[.key] | .other = $other[.key] | combine\n  else . end\n);\n\ndef jqmd::combine: (.this|type) as $this | (.other|type) as $other | .value =\n  if $this == "array" then\n    if $other == "array" then .this + .other else .this + [.other] end\n  elif $this == "object" then\n    if $other == "object" then\n      .other as $o | (.this | jqmd::blend($o; jqmd::combine))\n    else .other end\n  else .other end;  # everything else just overrides\n\ndef jqmd::data($data): {this: ., other:$data} | jqmd::combine | .value ;\n\'\n')
-mdsh_raw_bash_runtime+=($'y2j() {\n    local p j="$(echo "$1" | yaml2json)"; REPLY=\n    while [[ $j == *\'\\\\(\'* ]]; do\n        p=${j%%\'\\\\(\'*}; j=${j#"$p"\'\\\\(\'}\n        if [[ $p =~ (^|[^\\\\])(\'\\\\\\\\\')*$ ]]; then\n            p="${p}"\'\\(\' # odd, unbalance the backslash\n        else\n            p="${p}("   # even, remove one actual backslash\n        fi\n        REPLY+=$p\n    done\n    REPLY+=$j\n}\n')
-mdsh_raw_bash_runtime+=($'yaml2json:cmd() { command yaml2json /dev/stdin; }\n\nyaml2json:py() {\n    python -c \'import sys, yaml, json; json.dump(yaml.safe_load(sys.stdin), sys.stdout)\'\n}\n\nyaml2json:php() {\n    php -r \'echo json_encode( yaml_parse(file_get_contents("php://stdin")) );\'\n}\n\nyaml2json() {\n    local kind  # auto-select between available yaml2json implementations\n    for kind in cmd py php; do\n        REPLY=($(yaml2json:$kind < <(echo "a: b") 2>/dev/null || true))\n        printf -v REPLY %s ${REPLY+"${REPLY[@]}"}\n        if [[ "$REPLY" == \'{"a":"b"}\' ]]; then\n            eval "yaml2json() { yaml2json:$kind; }"; yaml2json; return\n        fi\n    done\n    mdsh-error "To process YAML, must have one of: yaml2json, PyYAML, or php w/yaml extension"\n    exit 69 # EX_UNAVAILABLE\n}\n\n# --- END jqmd runtime ---\n')
+mdsh_raw_bash_runtime+=($'y2j() {\n    local p j="$(echo "$1" | yaml2json)" || return $?; REPLY=\n    while [[ $j == *\'\\\\(\'* ]]; do\n        p=${j%%\'\\\\(\'*}; j=${j#"$p"\'\\\\(\'}\n        if [[ $p =~ (^|[^\\\\])(\'\\\\\\\\\')*$ ]]; then\n            p="${p}"\'\\(\' # odd, unbalance the backslash\n        else\n            p="${p}("   # even, remove one actual backslash\n        fi\n        REPLY+=$p\n    done\n    REPLY+=$j\n}\n')
+mdsh_raw_bash_runtime+=($'yaml2json:cmd() { command yaml2json /dev/stdin; }\n\nyaml2json:py() {\n    python -c \'import sys, yaml, json; json.dump(yaml.safe_load(sys.stdin), sys.stdout)\'\n}\n\nyaml2json:php() { command yaml2json.php; }\n\nyaml2json() {\n    local kind  # auto-select between available yaml2json implementations\n    for kind in cmd py php; do\n        REPLY=($(yaml2json:$kind < <(echo "a: {}") 2>/dev/null || true))\n        printf -v REPLY %s ${REPLY+"${REPLY[@]}"}\n        if [[ "$REPLY" == \'{"a":{}}\' ]]; then\n            eval "yaml2json() { yaml2json:$kind; }"; yaml2json; return\n        fi\n    done\n    mdsh-error "To process YAML, must have one of: yaml2json, PyYAML, or php w/yaml extension"\n    exit 69 # EX_UNAVAILABLE\n}\n\n# --- END jqmd runtime ---\n')
 # Language Support
 mdsh-compile-jq()         { printf 'FILTER  %q\n' "$1"; }
 mdsh-compile-jq_defs()    { printf 'DEFINE  %q\n' "$1"; }
@@ -286,16 +286,25 @@ printf -v REPLY '%s\n' "${mdsh_raw_bash_runtime[@]}"; eval "$REPLY"
 printf -v REPLY 'mdsh:file-header() { echo -n %q; }' "$REPLY"; eval "$REPLY"
 
 # Ensure scripts process any leftover filters at end
-mdsh:file-footer() { echo 'if [[ $0 == $BASH_SOURCE ]] && HAVE_FILTERS; then RUN_JQ; fi'; }
+mdsh:file-footer() { echo 'if [[ $0 == ${BASH_SOURCE-} ]] && HAVE_FILTERS; then RUN_JQ; fi'; }
+mdsh.--no-runtime() ( unset -f mdsh:file-header mdsh:file-footer; mdsh-main "$@"; )
+mdsh.--yaml() (
+    fn-exists "yaml2json:${1-}" || mdsh-error "No such yaml2json processor: ${1-}" || exit $?
+    eval 'yaml2json() { yaml2json:'"$1"'; }'
+    mdsh-main "${@:2}"
+)
+
+mdsh.-R() { mdsh.--no-runtime "$@"; }
+mdsh.-y() { mdsh.--yaml "$@"; }
 set -euo pipefail  # Strict mode
 mdsh-parse() {
-	local cmd=$1 lang block ln indent fence close_fence indent_remove
+	local cmd=$1 lno=0 block_start lang block ln indent fence close_fence indent_remove
 	local open_fence='^( {0,3})(~~~+|```+) *([^`]*)$'
-	while IFS= read -r ln; do
+	while let lno++; IFS= read -r ln; do
 		if [[ $ln =~ $open_fence ]]; then
 			indent=${BASH_REMATCH[1]} fence=${BASH_REMATCH[2]} lang=${BASH_REMATCH[3]} block=
-			close_fence="^( {0,3})$fence+ *\$" indent_remove="^${indent// / ?}"
-			while IFS= read -r ln && ! [[ $ln =~ $close_fence ]]; do
+			block_start=$lno close_fence="^( {0,3})$fence+ *\$" indent_remove="^${indent// / ?}"
+			while let lno++; IFS= read -r ln && ! [[ $ln =~ $close_fence ]]; do
 				! [[ $ln =~ $indent_remove ]] || ln=${ln#$BASH_REMATCH}; block+=$ln$'\n'
 			done
 			lang="${lang%"${lang##*[![:space:]]}"}"; $cmd fenced "$lang" "$block";
@@ -319,13 +328,13 @@ __COMPILE__() {
 	local lang="${2//[^_[:alnum:]]/_}"; # convert language to safe variable/function name
 	local tag_words=($2);  # check for command blocks first
 	if [[ ${tag_words[1]-} == '!'* ]]; then
-		set -- "$3" "$2"; eval "${2#*!}"; return
+		set -- "$3" "$2" "$block_start"; eval "${2#*!}"; return
 	elif [[ ${tag_words[1]-} == '|'* ]]; then
 		echo "${2#*|} <<'\`\`\`'"; printf '%s```\n' "$3"; return
 	elif fn-exists mdsh-lang-$lang; then
 		mdsh-rewrite mdsh-lang-$lang "{" "} <<'\`\`\`'"; printf '%s```\n' "$3"
 	elif fn-exists mdsh-compile-$lang; then
-		mdsh-compile-$lang "$3"
+		mdsh-compile-$lang "$3" "$2" "$block_start"
 	else
 		mdsh-misc "$2" "$3"
 	fi
@@ -435,7 +444,7 @@ MDSH_MODULE=
 }
 @main() {
 	! [[ $MDSH_MODULE ]] || return 0
-	MDSH_FOOTER=$'if [[ $0 == "$BASH_SOURCE" ]]; then '"$1"$' "$@"; fi\n'
+	MDSH_FOOTER=$'if [[ $0 == "${BASH_SOURCE-}" ]]; then '"$1"$' "$@"; fi\n'
 }
 @comment() (  # subshell for cd
 	! [[ "${MDSH_SOURCE-}" == */* ]] || cd "${MDSH_SOURCE%/*}"
@@ -476,7 +485,12 @@ flatname() {
 }
 # run-markdown file args...
 # Compile `file` and source the result, passing along any positional arguments
-run-markdown() { source <(mdsh-source "${1--}") "${@:2}"; }
+run-markdown() {
+	if [[ $BASH_VERSINFO == 3 ]]; then # bash 3 can't source from proc
+		source /dev/fd/0 "${@:2}" <<<"$(mdsh-source "${1--}")"
+	else source <(mdsh-source "${1--}") "${@:2}"
+	fi
+}
 #!/usr/bin/env bash
 
 realpath.location() { realpath.follow "$1"; realpath.absolute "$REPLY" ".."; }
@@ -485,49 +499,47 @@ realpath.dirname()  { if [[ $1 =~ /+[^/]+/*$ ]]; then REPLY="${1%${BASH_REMATCH}
 realpath.basename() { if [[ $1 =~ /*([^/]+)/*$ ]]; then REPLY="${BASH_REMATCH[1]}"; else REPLY=/; fi }
 
 realpath.follow() {
-    local target
-    while [[ -L "$1" ]] && target=$(readlink -- "$1"); do
-        realpath.dirname "$1"
-        # Resolve symlink target relative to symlink's directory
-        [[ $REPLY != . && $target != /* ]] && REPLY=$REPLY/$target || REPLY=$target
-        # Break out if we found a symlink loop
-        for target; do [[ $REPLY == "$target" ]] && break 2; done
-        # Add current result to the loop-detect list and tail-recurse
-        set -- "$REPLY" "$@"
-    done
-    REPLY="$1"
+	local target
+	while [[ -L "$1" ]] && target=$(readlink -- "$1"); do
+		realpath.dirname "$1"
+		# Resolve symlink target relative to symlink's directory
+		[[ $REPLY != . && $target != /* ]] && REPLY=$REPLY/$target || REPLY=$target
+		# Break out if we found a symlink loop
+		for target; do [[ $REPLY == "$target" ]] && break 2; done
+		# Add current result to the loop-detect list and tail-recurse
+		set -- "$REPLY" "$@"
+	done
+	REPLY="$1"
 }
 
 realpath.absolute() {
-    REPLY=$PWD; local no_eg; shopt -q extglob || { no_eg=y; shopt -s extglob; }
-    while (($#)); do case $1 in
-        /*) REPLY=/; set -- "${1##+(/)}" "${@:2}" ;;
-        */*) set -- "${1%%/*}" "${1##${1%%/*}+(/)}" "${@:2}" ;;
-        ''|.) shift ;;
-        ..) realpath.dirname "$REPLY"; shift ;;
-        *) REPLY="${REPLY%/}/$1"; shift ;;
-    esac; done; ${no_eg:+shopt -u extglob}
+	REPLY=$PWD; local no_eg; shopt -q extglob || { no_eg=y; shopt -s extglob; }
+	while (($#)); do case $1 in
+		/*) REPLY=/; set -- "${1##+(/)}" "${@:2}" ;;
+		*/*) set -- "${1%%/*}" "${1##${1%%/*}+(/)}" "${@:2}" ;;
+		''|.) shift ;;
+		..) realpath.dirname "$REPLY"; shift ;;
+		*) REPLY="${REPLY%/}/$1"; shift ;;
+	esac; done; ${no_eg:+shopt -u extglob}
 }
 
 realpath.canonical() {
-    local target=""
-    realpath.follow "$1"; set -- "$REPLY"   # $1 is now resolved
-    realpath.basename "$1"; target=$REPLY   # target = basename $1
-    realpath.dirname "$1";
-    [[ $REPLY != "$1" ]] && realpath.canonical "$REPLY"; # recurse unless root
-    realpath.absolute "$REPLY" "$target";   # combine canon parent w/basename
+	realpath.follow "$1"; set -- "$REPLY"   # $1 is now resolved
+	realpath.basename "$1"; set -- "$1" "$REPLY"   # $2 = basename $1
+	realpath.dirname "$1"
+	[[ $REPLY != "$1" ]] && realpath.canonical "$REPLY"; # recurse unless root
+	realpath.absolute "$REPLY" "$2";   # combine canon parent w/basename
 }
 
 realpath.relative() {
-    local target=""
-    realpath.absolute "$1"; set -- "$REPLY" "${@:2}"; realpath.absolute "${2-$PWD}" X
-    while realpath.dirname "$REPLY"; [[ "$1" != "$REPLY" && "$1" == "${1#${REPLY%/}/}" ]]; do
-        target=../$target
-    done
-    [[ $1 == "$REPLY" ]] && REPLY=${target%/} || REPLY="$target${1#${REPLY%/}/}"
-    REPLY=${REPLY:-.}
+	local target=""
+	realpath.absolute "$1"; set -- "$REPLY" "${@:2}"; realpath.absolute "${2-$PWD}" X
+	while realpath.dirname "$REPLY"; [[ "$1" != "$REPLY" && "$1" == "${1#${REPLY%/}/}" ]]; do
+		target=../$target
+	done
+	[[ $1 == "$REPLY" ]] && REPLY=${target%/} || REPLY="$target${1#${REPLY%/}/}"
+	REPLY=${REPLY:-.}
 }
-
 # For documentation, see https://github.com/bashup/loco
 
 set -euo pipefail
@@ -623,4 +635,4 @@ for lv in ${!LOCO_@}; do unset $lv; done
 LOCO_SCRIPT=$0
 DEFINE "${mdsh_raw_jq_api[*]}"
 mdsh-error() { printf -v REPLY "$1\n" "${@:2}"; loco_error "$REPLY"; }
-if [[ $0 == "$BASH_SOURCE" ]]; then loco_main "$@"; fi
+if [[ $0 == "${BASH_SOURCE-}" ]]; then loco_main "$@"; fi
