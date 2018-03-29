@@ -28,6 +28,8 @@ version: "2.1"
 services:
   example1:
     image: bash
+networks:
+  default: {external: {name: bridge}}
 ```
 
 ```jq
