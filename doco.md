@@ -65,12 +65,15 @@
 
 doco is a project automation tool for doing literate devops with docker-compose.  It's an extension of both loco and jqmd, written as a literate program using mdsh.  Within this source file, `shell` code blocks are the main program, while `shell mdsh` blocks are metaprogramming, and `~~~shell` blocks are examples tested with cram.
 
-The main program begins with a `#!` line and edit warning, followed by its license text:
+The main program begins with a `#!` line and edit warning, followed by its license text and embedded copies of jqmd and loco:
 
 ```shell mdsh
 @module doco.md
-@import pjeby/license @comment LICENSE
 @main loco_main
+
+@require pjeby/license @comment LICENSE
+@require bashup/jqmd   mdsh-source "$BASHER_PACKAGES_PATH/bashup/jqmd/jqmd.md"
+@require bashup/loco   mdsh-source "$BASHER_PACKAGES_PATH/bashup/loco/loco.md"
 ```
 
 And for our tests, we source this file and set up some testing tools:
@@ -1108,13 +1111,8 @@ doco.sh() { doco cmd 1 exec bash "$@"; }
 
 ## Merging jqmd and loco
 
-We embed a copy of the jqmd and loco source modules (so they doesn't have to be installed separately), pass along our jq API functions to jqmd, and override the `mdsh-error` function to call `loco_error` so that all errors ultimately go through the same function.
+We pass along our jq API functions to jqmd, and override the `mdsh-error` function to call `loco_error` so that all errors ultimately go through the same function.
 
-```shell mdsh
-for REPLY in jqmd loco; do
-    @import bashup/$REPLY mdsh-source "$BASHER_PACKAGES_PATH/bashup/$REPLY/$REPLY.md"
-done
-```
 ```shell
 DEFINE "${mdsh_raw_jq_api[*]}"
 mdsh-error() { printf -v REPLY "$1\n" "${@:2}"; loco_error "$REPLY"; }
