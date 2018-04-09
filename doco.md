@@ -496,19 +496,18 @@ have-services() { eval "((${#DOCO_SERVICES[@]} ${1-}))"; }
 
 #### `include` *markdownfile [cachefile]*
 
-Source the mdsh compilation  of the specified markdown file, saving it in *cachefile* first.  If *cachefile* exists and has the same timestamp as *markdownfile*, *cachefile* is sourced without compiling.  If no *cachefile* is given, compilation is done to a file under `.doco-cache/includes`.
+Source the mdsh compilation  of the specified markdown file, saving it in *cachefile* first.  If *cachefile* exists and has the same timestamp as *markdownfile*, *cachefile* is sourced without compiling.  If no *cachefile* is given, compilation is done to a file under `.doco-cache/includes`.  A given *markdownfile* can only be included once: this operation is a no-op if *markdownfile* has been `include`d  before.
 
 ```shell
 include() {
+    realpath.absolute "$1"
     if [[ ! "${2-}" ]]; then
-        mdsh-cache "$LOCO_ROOT/.doco-cache/includes" "$1" "" pre-include
-        source "$REPLY"
+        __include() { mdsh-cache "$LOCO_ROOT/.doco-cache/includes" "$1" ""; source "$REPLY"; }
     else
-        mdsh-make "$1" "$2" pre-include; source "$2"
+        __include() { mdsh-make "$1" "$2"; source "$2"; }
     fi
+    @require "doco-include:$REPLY" __include "$@"
 }
-
-pre-include() { unset -f mdsh:file-header mdsh:file-footer; }
 ```
 
 #### `project-name` *[service index]*
