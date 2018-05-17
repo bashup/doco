@@ -2,11 +2,13 @@
 
 doco is an extensible tool for project automation and literate devops using docker-compose.  All docker-compose subcommands are subcommands of `doco`, along with any custom subcommands you define in your project, user, or global configuration files.
 
-In addition to letting you create custom commands and apply them to a configuration, you can also define your docker-compose configuration *and* custom commands as YAML, [jq](http://stedolan.github.io/jq/) code, and shell functions embeded in a markdown file.  In this way, you can document your project's configuration and custom commands directly alongside the code that implements them.
+In addition to letting you create custom commands and apply them to a configuration, you can also define your docker-compose configuration *and* custom commands as YAML, [jq](http://stedolan.github.io/jq/) code, and shell functions embedded in a markdown file.  In this way, you can document your project's configuration and custom commands directly alongside the code that implements them.
 
-## Basic Use
+Last, but not least, doco supports many ways of applying commands to one or more containers, which can be explicitly listed, qualified by jq queries against your configuration, or specified using aliases. If `group1` and `group2` are aliases you've defined in your configuration, then `doco group1 group2 ps `will expand to `docker-compose ps` *[services in group1] \[services in group 2]*.  You can also create subcommands that apply to a specific group or service by default, run single-container commands against each container in a group, and more.
 
-doco is a mashup of [loco](https://github.com/bashup/loco) (for project configuration and subcommands) and [jqmd](https://github.com/bashup/jqmd) (for literate programming and jq support).  You can install it with [basher](https://github.com/basherpm/basher) (i.e. via `basher install bashup/doco`), or just copy the [binary](bin/doco) to a directory on your `PATH`.  You will need [jq](http://stedolan.github.io/jq/) and docker-compose on your `PATH` as well, along with either a yaml2json command (such as [this one](https://github.com/bronze1man/yaml2json)), PyYAML, or the YAML extension for PHP.
+## Installation and Basic Use
+
+doco is a mashup of [loco](https://github.com/bashup/loco) (for project configuration and subcommands) and [jqmd](https://github.com/bashup/jqmd) (for literate programming and jq support).  You can install it with [basher](https://github.com/basherpm/basher) (i.e. via `basher install bashup/doco`), or just copy the [binary](bin/doco) to a directory on your `PATH`.  You will need [jq](http://stedolan.github.io/jq/) and docker-compose on your `PATH` as well, along with either a yaml2json command (such as [this one](https://github.com/bronze1man/yaml2json)), PyYAML, or [yaml2json.php](https://packagist.org/packages/dirtsimple/yaml2json).
 
 In its simplest use, doco can be used to add custom commands to an existing docker-compose project: just create a `.doco` file alongside your `docker-compose.yml`, and define bash functions in it using the [doco API](doco.md#api) and [CLI](doco.md#command-line-interface).  A function named `doco.X` will define a doco subcommand `X`.
 
@@ -56,7 +58,7 @@ Your project document can include as many `shell`, `yaml`, and `jq` blocks as yo
 
 Of course, you won't want to put sensitive data directly in your project document.  So, just like with docker-compose, you can use an `.env` file.
 
-You're also not limited to just the contents of your main project document to do configuration.  The shell code embedded in your project document can use [export-env](doco.md#export-env-filename) to process additional docker-compose format `.env` files, or [include](include-markdownfile-cachefile) to source other markdown documents with the same syntax.  This can be useful for projects that want to be extensible, where a user can define local extension documents alongside a main project document that's kept in revision control.
+You're also not limited to just the contents of your main project document to do configuration.  The shell code embedded in your project document can use [export-env](doco.md#export-env-filename) to process additional docker-compose format `.env` files, or [include](doco.md#include-markdownfile-cachefile) to source other markdown documents with the same syntax.  This can be useful for projects that want to be extensible, where a user can define local extension documents alongside a main project document that's kept in revision control.
 
 ### Caching
 
