@@ -502,11 +502,12 @@ Source the mdsh compilation  of the specified markdown file, saving it in *cache
 include() {
     realpath.absolute "$1"
     if [[ ! "${2-}" ]]; then
-        __include() { mdsh-cache "$LOCO_ROOT/.doco-cache/includes" "$1" ""; source "$REPLY"; }
+        local MDSH_CACHE="$LOCO_ROOT/.doco-cache/includes"
+        @require "doco-include:$REPLY" mdsh-run "$1" ""
     else
         __include() { mdsh-make "$1" "$2"; source "$2"; }
+        @require "doco-include:$REPLY" __include "$@"
     fi
-    @require "doco-include:$REPLY" __include "$@"
 }
 ```
 
