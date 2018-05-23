@@ -114,8 +114,8 @@ loco_preconfig() {
 ```
 
 ~~~shell
-    $ declare -p LOCO_FILE LOCO_NAME LOCO_USER_CONFIG LOCO_SITE_CONFIG DOCO_PROFILE
-    declare -a LOCO_FILE='([0]="*[-.]doco.md" [1]=".doco" [2]="docker-compose.yml")'
+    $ declare -p LOCO_FILE LOCO_NAME LOCO_USER_CONFIG LOCO_SITE_CONFIG DOCO_PROFILE | sed "s/'//g"
+    declare -a LOCO_FILE=([0]="*[-.]doco.md" [1]=".doco" [2]="docker-compose.yml")
     declare -- LOCO_NAME="doco"
     declare -- LOCO_USER_CONFIG="/*/.config/doco" (glob)
     declare -- LOCO_SITE_CONFIG="/etc/doco/config"
@@ -436,10 +436,10 @@ find-services() { REPLY=($(RUN_JQ -r "services_matching(${1-true}) | .key" "$DOC
 ```
 
 ~~~shell
-    $ find-services; declare -p REPLY
-    declare -a REPLY='([0]="example1")'
-    $ find-services false; declare -p REPLY
-    declare -a REPLY='()'
+    $ find-services; declare -p REPLY | sed "s/'//g"
+    declare -a REPLY=([0]="example1")
+    $ find-services false; declare -p REPLY | sed "s/'//g"
+    declare -a REPLY=()
 ~~~
 
 #### `foreach-service` *cmd args...*
