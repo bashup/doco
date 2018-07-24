@@ -3,17 +3,26 @@
 dk use: cram              # run tests using the "cram" functional test tool
 dk use: entr-watch        # watch files and re-run tests or other commands
 dk use: shell-console     # make the "console" command enter a subshell
+dk use: bash32
+dk use: shellcheck
 
 # Define overrides, new commands, functions, etc. here:
 
-dk.bootstrap() {
-    for f in mdsh jqmd loco realpaths; do require $f basher install bashup/$f; done
-    mdsh --out "$BASHER_INSTALL_BIN/doco" --compile doco.md   # for sourcing and running by tests
-    chmod +x "$BASHER_INSTALL_BIN/doco"
-}
+for f in mdsh jqmd loco realpaths; do require $f basher install bashup/$f; done
 
-dk.build() {
-    dk test && mdsh --out bin/doco --compile doco.md && chmod +x bin/doco;
-}
+# SC1090 = dynamic 'source' command
+# SC1091 = not checking sourced files (i.e. '.doco')
+# SC2128 = array/string mixing
+# SC2145 = prefix or suffix on "$@" or other array
+# SC2178 = array/string mixing
+SHELLCHECK_OPTS='-e SC1090,SC1091,SC2128,SC2178'
 
-cram.files() { ls doco.md README.md; }
+on boot mdsh --out "$BASHER_INSTALL_BIN/doco" --compile doco.md   # for sourcing and running by tests
+on boot chmod +x "$BASHER_INSTALL_BIN/doco"
+
+on test dk shellcheck "$BASHER_INSTALL_BIN/doco"
+
+on build mdsh --out bin/doco --compile doco.md
+on build chmod +x bin/doco
+
+on cram_files ls doco.md README.md

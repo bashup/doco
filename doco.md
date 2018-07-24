@@ -105,7 +105,7 @@ Configuration is loaded using loco.  Specifically, by searching for `*.doco.md`,
 ```shell
 loco_preconfig() {
     export COMPOSE_PROJECT_NAME=
-    LOCO_FILE=("*[-.]doco.md" ".doco" "docker-compose.yml")
+    LOCO_FILE=("?*[-.]doco.md" ".doco" "docker-compose.yml")
     LOCO_NAME=doco
     LOCO_USER_CONFIG=$HOME/.config/doco
     LOCO_SITE_CONFIG=/etc/doco/config
@@ -115,7 +115,7 @@ loco_preconfig() {
 
 ~~~shell
     $ declare -p LOCO_FILE LOCO_NAME LOCO_USER_CONFIG LOCO_SITE_CONFIG DOCO_PROFILE | sed "s/'//g"
-    declare -a LOCO_FILE=([0]="*[-.]doco.md" [1]=".doco" [2]="docker-compose.yml")
+    declare -a LOCO_FILE=([0]="?*[-.]doco.md" [1]=".doco" [2]="docker-compose.yml")
     declare -- LOCO_NAME="doco"
     declare -- LOCO_USER_CONFIG="/*/.config/doco" (glob)
     declare -- LOCO_SITE_CONFIG="/etc/doco/config"
@@ -137,8 +137,8 @@ loco_loadproject() {
     local json=$COMPOSE_FILE; DOCO_CONFIG=
 
     realpath.basename "$1"; case "$REPLY" in
-    *[-.]doco.md)
-        check_multi doco.md *[-.]doco.md
+    ?*[-.]doco.md)
+        check_multi doco.md '?*[-.]doco.md'
         include "$1" "$LOCO_ROOT/.doco-cache.sh"
         ;;
     *)
@@ -167,6 +167,7 @@ add_override() { while (($#)); do [[ ! -f "$1" ]] || COMPOSE_FILE+=$'\n'"$1"; sh
 
 # Abort if more than one given filename exists
 check_multi() {
+   # shellcheck disable=SC2012,SC2068  # we're using wc and glob expansion is intentional
    (("$(ls ${@:2} 2>/dev/null | wc -l)" < 2)) || loco_error "Multiple $1 files in $LOCO_ROOT"
 }
 ```
@@ -353,7 +354,7 @@ export-env() {
     while IFS= read -r; do
         REPLY="${REPLY#"${REPLY%%[![:space:]]*}"}"  # trim leading whitespace
         REPLY="${REPLY%"${REPLY##*[![:space:]]}"}"  # trim trailing whitespace
-        [[ ! "$REPLY" || "$REPLY" == '#'* ]] || export "$REPLY"
+        [[ ! "$REPLY" || "$REPLY" == '#'* ]] || export "${REPLY?}"
     done <"$1"
 }
 ```
@@ -383,7 +384,7 @@ export-source() {
     local before="" after=""
     before="$(compgen -v)"; source "$@"; after="$(compgen -v)"
     after="$(echo "$after" | grep -vxF -f <(echo "$before"))" || true
-    [[ -z "$after" ]] || export $after
+    [[ -z "$after" ]] || eval "export $after"
 }
 ```
 
@@ -432,7 +433,7 @@ compose() { docker-compose ${DOCO_OPTS[@]+"${DOCO_OPTS[@]}"} "$@"; }
 Search the docker compose configuration for `services_matching(`*jq-filter*`)`, returning their names as an array in `REPLY`.  If *jq-filter* isn't supplied, `true` is used.  (i.e., find all services.)
 
 ```shell
-find-services() { REPLY=($(RUN_JQ -r "services_matching(${1-true}) | .key" "$DOCO_CONFIG")); }
+find-services() { REPLY=$(RUN_JQ -r "services_matching(${1-true}) | .key" "$DOCO_CONFIG") && IFS=$'\n' mdsh-splitwords "$REPLY"; }
 ```
 
 ~~~shell
@@ -482,6 +483,7 @@ get-alias() { REPLY=(); ! alias-exists "$1" || "doco-alias-$1"; }
 Return true if the current service count matches the bash numeric comparison *compexpr*; if no *compexpr* is supplied, returns true if the current service count is non-zero.
 
 ```shell
+# shellcheck disable=SC2120  # shellcheck doesn't understand optional arguments
 have-services() { eval "((${#DOCO_SERVICES[@]} ${1-}))"; }
 ```
 
@@ -522,7 +524,7 @@ project-name() {
     REPLY=${COMPOSE_PROJECT_NAME-}
     [[ $REPLY ]] || realpath.basename "$LOCO_ROOT"   # default to directory name
     REPLY=${REPLY//[^[:alnum:]]/}; REPLY=${REPLY,,}  # lowercase and remove non-alphanumerics
-    ! (($#)) || REPLY+="_${1}_${2-1}"                # container name
+    ! (($#)) || REPLY=$REPLY"_${1}_${2-1}"           # container name
 }
 ```
 
@@ -777,6 +779,7 @@ Most docker-compose global options are added to the `DOCO_OPTS` array, where the
 ```shell
 docker-compose-options() {
     while (($#)); do
+        # shellcheck disable=SC2089  # shellcheck hates metaprogramming
         printf -v REPLY 'doco.%s() { doco-opt %s doco "$@"; }' "$1" "$1"; eval "$REPLY"; shift
     done
 }
@@ -880,7 +883,7 @@ doco.--where() {
     elif ! ((${#REPLY[@]})); then
         echo "No matching services" >&2; return 1
     else
-        printf "%s\n" "${REPLY[@]}"   # list matching services
+        printf '%s\n' "${REPLY[@]}"   # list matching services
     fi
 }
 ```
@@ -921,7 +924,7 @@ Invoke `doco` *subcommand args...*, adding *alias* to the current service set if
 
 ```shell
 doco.--with-default() {
-    if have-services; then doco "${@:2}"; else with-alias "$1" doco "${@:2}"; fi
+    if have-services ''; then doco "${@:2}"; else with-alias "$1" doco "${@:2}"; fi
 }
 ```
 
@@ -940,7 +943,8 @@ This is the command-line equivalent of calling `require-services` *flag subcomma
 ```shell
 doco.--require-services() {
     [[ ${1:0:1} == [-+1.] ]] || loco_error "--require-services argument must begin with ., -, +, or 1"
-    require-services $1 "$2" && doco "${@:2}";
+    # shellcheck disable=SC2090  # bash 4.3 needs this syntax because "${x[@]:0}" doesn't play nice w/-u
+    mdsh-splitwords "$1" && require-services ${REPLY[@]+"${REPLY[@]}"} "$2" && doco "${@:2}";
 }
 ```
 
@@ -978,10 +982,10 @@ Copy a file in or out of a service container.  Functions the same as `docker cp`
 
 ```shell
 doco.cp() {
-    local opts= seen=
+    local opts=() seen=''
     while (($#)); do
         case "$1" in
-        -a|--archive|-L|--follow-link) opts+=" $1" ;;
+        -a|--archive|-L|--follow-link) opts+=("$1") ;;
         --help|-h) docker help cp || true; return ;;
         -*) loco_error "Unrecognized option $1; see 'docker help cp'" ;;
         *) break ;;
@@ -998,16 +1002,16 @@ doco.cp() {
             elif ((${#DOCO_SERVICES[@]} == 1)); then
                 project-name "$DOCO_SERVICES"; set -- "$REPLY$1" "${@:2}"
             else
-                doco --with-default shell-default --require-services 1 cp $opts "$@"; return $?
+                doco --with-default shell-default --require-services 1 cp ${opts[@]+"${opts[@]}"} "$@"; return $?
             fi
         elif [[ $1 != /* && $1 != - ]]; then
             # make paths relative to original run directory
             set -- "$LOCO_PWD/$1" "${@:2}";
         fi
-        printf -v opts "%s %q" "$opts" "$1"; shift
+        opts+=("$1"); shift
     done
     [[ "$seen" ]] || loco_error "cp: either source or destination must contain a :"
-    docker cp $opts
+    docker cp ${opts[@]+"${opts[@]}"}
 }
 ```
 
@@ -1115,5 +1119,6 @@ We pass along our jq API functions to jqmd, and override the `mdsh-error` functi
 
 ```shell
 DEFINE "${mdsh_raw_jq_api[*]}"
-mdsh-error() { printf -v REPLY "$1\n" "${@:2}"; loco_error "$REPLY"; }
+# shellcheck disable=SC2059  # argument is a printf format string
+mdsh-error() { printf -v REPLY "$1"'\n' "${@:2}"; loco_error "$REPLY"; }
 ```
