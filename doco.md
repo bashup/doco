@@ -159,7 +159,8 @@ Add *targets* to the named alias(es), defining or redefining subcommands and jq 
 ALIAS() {
     local alias svc DOCO_SERVICES=()
     (($#>1)) || loco_error "ALIAS requires at least two arguments"
-    SERVICES "${@:2}"; for alias in $1; do __mkalias "$alias" "${@:2}"; done
+    SERVICES "${@:2}"; mdsh-splitwords "$1"
+    for alias in "${REPLY[@]}"; do __mkalias "$alias" "${@:2}"; done
 }
 __mkalias() {
      if (($#)); then with-alias "$1" __mkalias "${@:2}"; return; fi
@@ -408,26 +409,24 @@ Commands that take exactly *one* service (exec, run, and port) are modified to r
 Inserting the service argument at the appropriate place requires parsing the command's options, specifically those that take an argument.
 
 ```shell
-doco.exec() { __compose_one exec -e --env -u --user --index -- "$@"; }
-doco.run()  { __compose_one run  -p --publish -v --volume -w --workdir -e --env -u --user --name --entrypoint -- "$@"; }
-doco.port() { __compose_one port --protocol --index -- "$@"; }
+doco.exec() { __compose_one exec '-e|--env|-u|--user|--index' "$@"; }
+doco.run()  { __compose_one run  '-p|--publish|-v|--volume|-w|--workdir|-e|--env|-u|--user|--name|--entrypoint' "$@"; }
+doco.port() { __compose_one port '--protocol|--index' "$@"; }
 
 __compose_one() {
-    local svc opts='' argv=("$1")
-
-    # Build up a list of options that take an argument
-    while shift && (($#)) && [[ $1 != '--' ]]; do opts+="<$1>"; done
+    local svc opts=^$2\$ argv=("$1"); shift
 
     # Parse the command line, skipping options' argument values
     while shift && (($#)) && [[ $1 == -* ]]; do
         # Treat '--' as end of options
         if [[ $1 == -- ]]; then shift; break; fi
-        argv+=("$1"); if [[ $opts = *"<$1>"* ]]; then shift; argv+=("$1"); fi
+        argv+=("$1"); if [[ $1 =~ $opts ]]; then shift; argv+=("$1"); fi
     done
 
     if ((${#DOCO_SERVICES[@]})); then
         for svc in "${DOCO_SERVICES[@]}"; do compose "${argv[@]}" "$svc" "$@"; done
     else
+        # XXX should check that $1 is a valid service
         compose "${argv[@]}" "$@"
     fi
 }

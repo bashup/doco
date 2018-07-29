@@ -13,7 +13,6 @@ for f in mdsh jqmd loco realpaths; do require $f basher install bashup/$f; done
 # SC1090 = dynamic 'source' command
 # SC1091 = not checking sourced files (i.e. '.doco')
 # SC2128 = array/string mixing
-# SC2145 = prefix or suffix on "$@" or other array
 # SC2178 = array/string mixing
 SHELLCHECK_OPTS='-e SC1090,SC1091,SC2128,SC2178'
 
