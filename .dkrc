@@ -1,23 +1,30 @@
 #!/usr/bin/env bash
 
 dk use: cram              # run tests using the "cram" functional test tool
-dk use: entr-watch        # watch files and re-run tests or other commands
+dk use: modd-watch        # watch files and re-run tests or other commands
 dk use: shell-console     # make the "console" command enter a subshell
 dk use: bash32
 dk use: shellcheck
 
 # Define overrides, new commands, functions, etc. here:
 
-for f in mdsh jqmd loco realpaths; do require $f basher install bashup/$f; done
+for f in bashup.events mdsh jqmd loco realpaths; do
+	require $f basher install bashup/${f#bashup.}
+done
+
 
 # SC1090 = dynamic 'source' command
 # SC1091 = not checking sourced files (i.e. '.doco')
+# SC2016 = bashup.events making strings for eval
+# SC2145 = using $@ w/prefix
 # SC2128 = array/string mixing
 # SC2178 = array/string mixing
-SHELLCHECK_OPTS='-e SC1090,SC1091,SC2128,SC2178'
+SHELLCHECK_OPTS='-e SC1090,SC1091,SC2016,SC2128,SC2145,SC2178'
 
-on boot mdsh --out "$BASHER_INSTALL_BIN/doco" --compile doco.md   # for sourcing and running by tests
-on boot chmod +x "$BASHER_INSTALL_BIN/doco"
+watch+ "*.md" "docs/*.md" "!**/*.md.err" "!**/.~*.md" -- dk test
+
+before test mdsh --out "$BASHER_INSTALL_BIN/doco" --compile doco.md   # for sourcing and running by tests
+before test chmod +x "$BASHER_INSTALL_BIN/doco"
 
 on test dk shellcheck "$BASHER_INSTALL_BIN/doco"
 

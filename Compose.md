@@ -27,13 +27,13 @@ compose() { docker-compose ${DOCO_OPTS[@]+"${DOCO_OPTS[@]}"} "$@"; }
 
 #### Multi-Service Subcommands
 
-Unrecognized subcommands are first checked to see if they're an alias.  If not, they're sent to docker-compose, with the current service set appended to the command line.  (The service set is empty by default, causing docker-compose to apply commands to all services by default.)
+Unrecognized subcommands are first checked to see if they're a valid service or group.  If not, they're sent to docker-compose, with the current service set appended to the command line.  (The service set is empty by default, causing docker-compose to apply commands to all services by default.)
 
 ```shell
 DOCO_SERVICES=()
 loco_exec() {
-    if alias-exists "$1"; then
-        with-alias "$1" ${2+doco "${@:2}"};
+    if is-target-name "$1" && target "$1" exists; then
+        target "$1" call ${2+doco "${@:2}"};
     else
         compose "$@" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"};
     fi

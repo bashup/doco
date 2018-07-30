@@ -1,6 +1,19 @@
 ## Configuration
 
-<!--toc-->
+<!-- toc -->
+
+- [File and Function Names](#file-and-function-names)
+- [Project-Level Configuration](#project-level-configuration)
+- [Declarations](#declarations)
+  * [`GROUP` *name(s)... operator target(s)...*](#group-names-operator-targets)
+  * [`SERVICES` *name...*](#services-name)
+  * [`VERSION` *docker-compose version*](#version-docker-compose-version)
+- [Configuration Files API](#configuration-files-api)
+  * [`export-env` *filename*](#export-env-filename)
+  * [`export-source` *filename*](#export-source-filename)
+  * [`include` *markdownfile [cachefile]*](#include-markdownfile-cachefile)
+
+<!-- tocstop -->
 
 ### File and Function Names
 
@@ -8,6 +21,8 @@ Configuration is loaded using loco.  Specifically, by searching for `*.doco.md`,
 
 ```shell
 loco_preconfig() {
+    set -- "${BASH_VERSINFO[@]}"
+    (( $1 > 4 || $1 == 4 && $2 >= 4 )) || mdsh-error "Sorry; doco requires bash 4.4 or better"
     export COMPOSE_PROJECT_NAME=
     LOCO_FILE=("?*[-.]doco.md" ".doco" "docker-compose.yml")
     LOCO_NAME=doco
@@ -23,7 +38,7 @@ Project configuration is loaded into `$LOCO_ROOT/.doco-cache.json` as JSON text,
 
 If the configuration is a `*doco.md` file, it's entirely responsible for generating the configuration, and any standard `docker-compose{.override,}.y{a,}ml` file(s) are ignored.  Otherwise, the main YAML config is read before sourcing `.doco`, and the standard files are used to source the configuration.  (Note: the `.override` file, if any, is passed to docker-compose, but is *not* included in any jq filters or queries done by doco.)
 
-Either way, service aliases are created for any services that don't already have them.  (Minus any services that are only defined in an `.override`.)
+Either way, service targets are created for any services that don't already have them.  (Minus any services that are only defined in an `.override`.)
 
 ```shell
 loco_loadproject() {
@@ -69,33 +84,33 @@ check_multi() {
 
 ### Declarations
 
-#### `ALIAS` *name(s) targets...*
+#### `GROUP` *name(s)... operator target(s)...*
 
-Add *targets* to the named alias(es), defining or redefining subcommands and jq functions to map those aliases to the targeted services.  The *targets* may be services or aliases; if a target name isn't recognized it's assumed to be a service and defined as such.  Multiple aliases can be updated at once by passing them as a space-separated string in the first argument, e.g. `ALIAS "foo bar" baz spam` adds `baz` and `spam` to both the `foo` and `bar` aliases.
+Add *targets* to the named group(s), defining or redefining jq functions to map those groups to the targeted services.  The *targets* may be services or groups; if a target name isn't recognized it's assumed to be a service and defined as such.  The *operator* is either `:=` or `+=` -- if `+=`, the targets are are added to any existing contents of the groups.  If `:=`, the groups' existing contents are erased and replaced with *targets*.
 
-(Note that this function *adds* to the existing alias(es) and recursively expands aliases in the target list.  If you want to set an exact list of services, use `set-alias` instead.  Also note that the "recursive" expansion is *immediate*: redefining an alias used in the target list will not change the definition of the alias referencing it.)
+(Note that this function *adds* to the existing group(s) and recursively expands groups in the target list.  If you want to set an exact list of services, use `target "groupname" set ...` instead.  Also note that the "recursive" expansion is *immediate*: redefining a group used in the target list will *not* update the definition of the referencing group.)
 
 ```shell
-ALIAS() {
-    local alias svc DOCO_SERVICES=()
-    (($#>1)) || loco_error "ALIAS requires at least two arguments"
-    SERVICES "${@:2}"; mdsh-splitwords "$1"
-    for alias in "${REPLY[@]}"; do __mkalias "$alias" "${@:2}"; done
-}
-__mkalias() {
-     if (($#)); then with-alias "$1" __mkalias "${@:2}"; return; fi
-     set-alias "$alias" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}
+GROUP() {
+    (($#>1)) || loco_error "GROUP requires at least two arguments"
+    local op groups=(); while (($#)) && [[ $1 != [+:]= ]]; do groups+=("$1"); shift; done
+    for svc in "${@:2}"; do target "$svc" exists || target "$svc" declare-service; done
+    case "${1-}" in
+        +=) op='add' ;;
+        :=) op='set' ;;
+        *) fail "GROUP needs += or :=" || return
+    esac
+    [[ ${groups[*]-} ]] || fail "No groups given" || return
+    for REPLY in "${groups[@]}"; do target "$REPLY" "$op" "${@:2}"; done
 }
 ```
 
 #### `SERVICES` *name...*
 
-Define subcommands and jq functions for the given service names.  `SERVICES foo bar` will create `foo` and `bar` commands that set the current service set (`DOCO_SERVICES`)  to that service, along with jq functions `foo()` and `bar()` that can be used to alter `.services.foo` and `.services.bar`, respectively.  If an alias of a given *name* is already defined, it is *not* redefined.
-
-(Note: this command is effectively a shortcut for aliasing a service name to itself if it doesn't already exist, i.e. `set-alias` *name name*.)
+Declare the named targets to be services and define jq functions for them.  `SERVICES foo bar` will create jq functions `foo()` and `bar()` that can be used to alter `.services.foo` and `.services.bar`, respectively.  The given names must be valid container names and must not already be defined as groups.
 
 ```shell
-SERVICES() { for svc in "$@"; do alias-exists "$svc" || set-alias "$svc" "$svc"; done; }
+SERVICES() { for REPLY; do target "$REPLY" declare-service; done; }
 ```
 
 #### `VERSION` *docker-compose version*

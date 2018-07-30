@@ -12,25 +12,24 @@
     + [Project-Level Configuration](#project-level-configuration)
   * [API](#api)
     + [Declarations](#declarations)
-      - [`ALIAS` *name(s) targets...*](#alias-names-targets)
+      - [`GROUP` *name(s) operator target(s)...*](#group-names-operator-targets)
       - [`SERVICES` *name...*](#services-name)
       - [`VERSION` *docker-compose version*](#version-docker-compose-version)
     + [Config](#config)
       - [`export-env` *filename*](#export-env-filename)
       - [`export-source` *filename*](#export-source-filename)
     + [Automation](#automation)
-      - [`alias-exists` *name*](#alias-exists-name)
+      - [`target` *name* `exists`](#target-name-exists)
       - [`compose`](#compose)
       - [`find-services` *[jq-filter]*](#find-services-jq-filter)
       - [`foreach-service` *cmd args...*](#foreach-service-cmd-args)
-      - [`get-alias` *alias*](#get-alias-alias)
+      - [`target` *target* `get`](#target-target-get)
       - [`have-services` *[compexpr]*](#have-services-compexpr)
       - [`include` *markdownfile [cachefile]*](#include-markdownfile-cachefile)
       - [`project-name` *[service index]*](#project-name-service-index)
       - [`require-services` *flag command-name*](#require-services-flag-command-name)
-      - [`set-alias` *alias services...*](#set-alias-alias-services)
-      - [`with-alias` *alias command...*](#with-alias-alias-command)
-      - [`with-service` *service(s) command...*](#with-service-services-command)
+      - [`target` *target* `call` *command...*](#target-target-call-command)
+      - [`with-targets` *target(s)* `--` *command...*](#with-targets-targets----command)
     + [jq API](#jq-api)
       - [`services`](#services)
       - [`services_matching(filter)`](#services_matchingfilter)
@@ -49,7 +48,7 @@
       - [`--all` *subcommand args...*](#--all-subcommand-args)
       - [`--where` *jq-filter [subcommand args...]*](#--where-jq-filter-subcommand-args)
       - [`--with` *service [subcommand args...]*](#--with-service-subcommand-args)
-      - [`--with-default` *alias [subcommand args...]*](#--with-default-alias-subcommand-args)
+      - [`--with-default` *target [subcommand args...]*](#--with-default-target-subcommand-args)
       - [`--require-services` *flag [subcommand args...]*](#--require-services-flag-subcommand-args)
     + [doco subcommands](#doco-subcommands)
       - [`cmd` *flag subcommand...*](#cmd-flag-subcommand)
@@ -105,7 +104,7 @@ Project configuration is loaded into `$LOCO_ROOT/.doco-cache.json` as JSON text,
 
 If the configuration is a `*doco.md` file, it's entirely responsible for generating the configuration, and any standard `docker-compose{.override,}.y{a,}ml` file(s) are ignored.  Otherwise, the main YAML config is read before sourcing `.doco`, and the standard files are used to source the configuration.  (Note: the `.override` file, if any, is passed to docker-compose, but is *not* included in any jq filters or queries done by doco.)
 
-Either way, service aliases are created for any services that don't already have them.  (Minus any services that are only defined in an `.override`.)
+Either way, service targets are created for any services that don't already have them.  (Minus any services that are only defined in an `.override`.)
 
 ~~~shell
 # COMPOSE_FILE is exported, pointing to the cache; DOCO_CONFIG is the same,
@@ -187,33 +186,33 @@ Either way, service aliases are created for any services that don't already have
 
 ### Declarations
 
-#### `ALIAS` *name(s) targets...*
+#### `GROUP` *name(s) operator target(s)...*
 
-Add *targets* to the named alias(es), defining or redefining subcommands and jq functions to map those aliases to the targeted services.  The *targets* may be services or aliases; if a target name isn't recognized it's assumed to be a service and defined as such.  Multiple aliases can be updated at once by passing them as a space-separated string in the first argument, e.g. `ALIAS "foo bar" baz spam` adds `baz` and `spam` to both the `foo` and `bar` aliases.
+Add *targets* to the named group(s), defining or redefining jq functions to map those groups to the targeted services.  The *targets* may be services or groups; if a target name isn't recognized it's assumed to be a service and defined as such.  The *operator* is either `:=` or `+=` -- if `+=`, the targets are are added to any existing contents of the groups.  If `:=`, the groups' existing contents are erased and replaced with *targets*.
 
-(Note that this function *adds* to the existing alias(es) and recursively expands aliases in the target list.  If you want to set an exact list of services, use `set-alias` instead.  Also note that the "recursive" expansion is *immediate*: redefining an alias used in the target list will not change the definition of the alias referencing it.)
+(Note that this function *adds* to the existing group(s) and recursively expands groups in the target list.  If you want to set an exact list of services, use `target "groupname" set ...` instead.  Also note that the "recursive" expansion is *immediate*: redefining a group used in the target list will *not* update the definition of the referencing group.)
 
 ~~~shell
 # Arguments required
 
-    $ (ALIAS)
-    ALIAS requires at least two arguments
+    $ (GROUP)
+    GROUP requires at least two arguments
     [64]
 
-# Alias one, non-existing name
+# Define one group, non-existing name
 
-    $ ALIAS delta-xray echo gamma-zulu
+    $ GROUP delta-xray += echo gamma-zulu
     $ doco delta-xray ps
     docker-compose ps echo gamma-zulu
-    $ RUN_JQ -c -n '{} | delta_xray(.image = "test")'
+    $ RUN_JQ -c -n '{} | delta::dash::xray(.image = "test")'
     {"services":{"echo":{"image":"test"},"gamma-zulu":{"image":"test"}}}
 
-# Add to multiple aliases, adding but not duplicating
+# Add to multiple groups, adding but not duplicating
 
-    $ ALIAS "tango delta-xray" niner gamma-zulu
+    $ GROUP tango delta-xray += niner gamma-zulu
     $ doco delta-xray ps
     docker-compose ps echo gamma-zulu niner
-    $ RUN_JQ -c -n '{} | delta_xray(.image = "test")'
+    $ RUN_JQ -c -n '{} | delta::dash::xray(.image = "test")'
     {"services":{"echo":{"image":"test"},"gamma-zulu":{"image":"test"},"niner":{"image":"test"}}}
 
     $ doco tango ps
@@ -221,23 +220,29 @@ Add *targets* to the named alias(es), defining or redefining subcommands and jq 
     $ RUN_JQ -c -n '{} | tango(.image = "test")'
     {"services":{"niner":{"image":"test"},"gamma-zulu":{"image":"test"}}}
 
-# "Recursive" alias expansion
+# "Recursive" group expansion
 
-    $ ALIAS whiskey tango foxtrot
+    $ GROUP whiskey += tango foxtrot
     $ doco whiskey ps
     docker-compose ps niner gamma-zulu foxtrot
+
+# Overwrite contents using :=
+
+    $ GROUP fiz := bar baz; target fiz get; printf '%q\n' "${REPLY[@]}"
+    bar
+    baz
+    $ GROUP fiz := bar; target fiz get; printf '%q\n' "${REPLY[@]}"
+    bar
 ~~~
 
 #### `SERVICES` *name...*
 
-Define subcommands and jq functions for the given service names.  `SERVICES foo bar` will create `foo` and `bar` commands that set the current service set (`DOCO_SERVICES`)  to that service, along with jq functions `foo()` and `bar()` that can be used to alter `.services.foo` and `.services.bar`, respectively.  If an alias of a given *name* is already defined, it is *not* redefined.
-
-(Note: this command is effectively a shortcut for aliasing a service name to itself if it doesn't already exist, i.e. `set-alias` *name name*.)
+Declare the named targets to be services and define jq functions for them.  `SERVICES foo bar` will create jq functions `foo()` and `bar()` that can be used to alter `.services.foo` and `.services.bar`, respectively.  The given names must be valid container names and must not already be defined as groups.
 
 ~~~shell
     $ SERVICES alfa foxtrot
 
-# command alias sets the active service set
+# services or groups as subcommands update the active service set
     $ doco alfa ps
     docker-compose ps alfa
 
@@ -295,14 +300,14 @@ Blank and comment lines are ignored, all others are fed to `export` after stripp
 
 ### Automation
 
-#### `alias-exists` *name*
+#### `target` *name* `exists`
 
-Return success if *name* has previously been defined as a service or alias.
+Return success if *name* has previously been defined as a service or group.
 
 ~~~shell
-    $ alias-exists nonesuch || echo nope
+    $ target nonesuch exists || echo nope
     nope
-    $ (SERVICES nonesuch; alias-exists nonesuch && echo yep)
+    $ (SERVICES nonesuch; target nonesuch exists && echo yep)
     yep
 ~~~
 
@@ -331,22 +336,23 @@ Search the docker compose configuration for `services_matching(`*jq-filter*`)`, 
 Invoke *cmd args...* once for each service in the current service set; the service set will contain exactly one service during each invocation.
 
 ~~~shell
-    $ with-service "foo bar" foreach-service eval 'echo "${DOCO_SERVICES[@]}"'
+    $ SERVICES foo bar
+    $ with-targets foo bar -- foreach-service eval 'echo "${DOCO_SERVICES[@]}"'
     foo
     bar
     $ foreach-service eval 'echo "${DOCO_SERVICES[@]}"'
 ~~~
 
-#### `get-alias` *alias*
+#### `target` *target* `get`
 
-Return the current value of alias *alias* as an array in `REPLY`.  Returns an empty array if the alias doesn't exist.
+Return the current value of target *target* as an array in `REPLY`.  Returns false if the group or service doesn't exist.
 
 ~~~shell
-    $ get-alias tango; printf '%q\n' ${REPLY[@]}
+    $ target tango get && printf '%q\n' ${REPLY[@]}
     niner
     gamma-zulu
-    $ get-alias nonesuch; echo ${#REPLY[@]}
-    0
+    $ target nonesuch get || echo nonexistent
+    nonexistent
 ~~~
 
 #### `have-services` *[compexpr]*
@@ -354,9 +360,10 @@ Return the current value of alias *alias* as an array in `REPLY`.  Returns an em
 Return true if the current service count matches the bash numeric comparison *compexpr*; if no *compexpr* is supplied, returns true if the current service count is non-zero.
 
 ~~~shell
-    $ with-service "a b" have-services '>1' && echo yes
+    $ SERVICES a b
+    $ with-targets a b -- have-services '>1' && echo yes
     yes
-    $ with-service "a b" have-services '>2' || echo no
+    $ with-targets a b -- have-services '>2' || echo no
     no
     $ have-services || echo no
     no
@@ -385,9 +392,10 @@ Checks the number of currently selected services, based on *flag*.  If flag is `
 
 ~~~shell
 # Test harness:
+    $ SERVICES x y
     $ doco.test-rs() { require-services "$1" test-rs; echo success; }
     $ test-rs() { (doco -- "${@:2}" test-rs "$1") || echo "[$?]"; }
-    $ test-rs-all() { test-rs $1; test-rs $1 --with "x y"; test-rs $1 --with foo; }
+    $ test-rs-all() { test-rs $1; test-rs $1 x y; test-rs $1 foo; }
 
 # 1 = exactly one service
     $ test-rs-all 1
@@ -418,39 +426,25 @@ Checks the number of currently selected services, based on *flag*.  If flag is `
     success
 ~~~
 
-#### `set-alias` *alias services...*
+#### `target` *target* `call` *command...*
 
-Set the named *alias* to expand to the given list of services.  Similar to `ALIAS`, except that the existing service list for the alias is overwritten, only one *alias* can be supplied, and the supplied targets are interpreted as service names, ignoring any aliases.
+Run *command...* with the expansion of *target* added to the current service set (without duplicating existing services).   (Note that *command* is a shell command, not a `doco` subcommand!)
 
 ~~~shell
-    $ set-alias fiz bar baz; get-alias fiz; printf '%q\n' "${REPLY[@]}"
-    bar
-    baz
-    $ set-alias fiz bar; get-alias fiz; printf '%q\n' "${REPLY[@]}"
+    $ target fiz call eval $'printf \'%q\n\' "${DOCO_SERVICES[@]}"'
     bar
 ~~~
 
-#### `with-alias` *alias command...*
+#### `with-targets` *target(s)* `--` *command...*
 
-Run *command...* with the expansion of *alias* added to the current service set (without duplicating existing services).   (Note that *command* is a shell command, not a `doco` subcommand!)
-
-~~~shell
-    $ with-alias fiz eval $'printf \'%q\n\' "${DOCO_SERVICES[@]}"'
-    bar
-~~~
-
-#### `with-service` *service(s) command...*
-
-Run command with *service(s)* added to the current service set (without duplicating existing services).  The first argument can be a space-separated list of service names.  (Note that *command* is a shell command, not a `doco` subcommand!)
+Run command with *target(s)* added to the current service set (without duplicating existing services).  Note that *command* is a shell command, not a `doco` subcommand!
 
 ~~~shell
-    $ with-service "foo bar" with-service "bar baz" eval $'printf \'%q\n\' "${DOCO_SERVICES[@]}"'
+    $ with-targets foo bar -- with-targets bar baz -- eval $'printf \'%q\n\' "${DOCO_SERVICES[@]}"'
     foo
     bar
     baz
 ~~~
-
-
 
 ### jq API
 
@@ -492,14 +486,14 @@ def services_matching(f): services | to_entries | .[] | select( .value | f ) ;
 
 #### Multi-Service Subcommands
 
-Unrecognized subcommands are first checked to see if they're an alias.  If not, they're sent to docker-compose, with the current service set appended to the command line.  (The service set is empty by default, causing docker-compose to apply commands to all services by default.)
+Unrecognized subcommands are first checked to see if they're a service or group.  If not, they're sent to docker-compose, with the current service set appended to the command line.  (The service set is empty by default, causing docker-compose to apply commands to all services by default.)
 
 ~~~shell
-    $ doco foo
-    docker-compose foo
-    $ (ALIAS foo bar; doco foo ps)
+    $ doco foo2
+    docker-compose foo2
+    $ (GROUP foo2 += bar; doco foo2 ps)
     docker-compose ps bar
-    $ (ALIAS foo bar; doco foo bar)
+    $ (GROUP foo2 += bar; doco foo2 bar)
 ~~~
 
 #### Non-Service Subcommands
@@ -523,10 +517,11 @@ Commands that take exactly *one* service (exec, run, and port) are modified to r
 Inserting the service argument at the appropriate place requires parsing the command's options, specifically those that take an argument.
 
 ~~~shell
-    $ doco --with x port --protocol udp 53
+    $ doco x port --protocol udp 53
     docker-compose port --protocol udp x 53
 
-    $ doco --with "x y z" run -e FOO=bar foo
+    $ SERVICES x y z
+    $ doco x y z run -e FOO=bar foo
     docker-compose run -e FOO=bar x foo
     docker-compose run -e FOO=bar y foo
     docker-compose run -e FOO=bar z foo
@@ -544,8 +539,8 @@ Inserting the service argument at the appropriate place requires parsing the com
 Most docker-compose global options are added to the `DOCO_OPTS` array, where they will pass through to any subcommand.
 
 ~~~shell
-    $ doco --verbose --tlskey blah foo
-    docker-compose --verbose --tlskey blah foo
+    $ doco --verbose --tlskey blah ps
+    docker-compose --verbose --tlskey blah ps
 ~~~
 
 #### Aborting Options (--help, --version, etc.)
@@ -584,7 +579,8 @@ Project level options are fixed and can't be changed via the command line.
 Reset the active service set to empty.  This can be used to ensure a command is invoked for all (or no) services, even if a service set was previously selected:
 
 ~~~shell
-    $ doco --with "a b c" -- ps
+    $ SERVICES a b c
+    $ doco a b c -- ps
     docker-compose ps
 ~~~
 
@@ -617,8 +613,6 @@ Add services matching *jq-filter* to the current service set and invoke `doco` *
 
 The `with`  subcommand adds one or more services to the current service set and invokes  `doco` *subcommand args...*.  The *service* argument is either a single service name or a string containing a space-separated list of service names.  `--with` can be given more than once.  (To reset the service set to empty, use `--`.)
 
-At first glance, this command might appear redundant to simply adding the service names to the end of a regular command.  But since you can write custom subcommands that execute multiple docker commands, or that loop over `DOCO_SERVICES` to perform other operations (not to mention subcommands that invoke `with` with a preset list of services), it can come quite in handy.
-
 ~~~shell
     $ doco --with "a b" ps
     docker-compose ps a b
@@ -626,9 +620,11 @@ At first glance, this command might appear redundant to simply adding the servic
     docker-compose ps a b c
 ~~~
 
-#### `--with-default` *alias [subcommand args...]*
+You don't normally need to use this option, because you can simply run `doco` *targets... subcommand...* in the first place.  It's really only useful in cases where you have service or group names that might conflict with other subcommand names, or need to store a set of group/service names in a non-array variable (e.g. in a `.env` file.)
 
-Invoke `doco` *subcommand args...*, adding *alias* to the current service set if the current set is empty.  *alias* can be nonexistent or empty, so you may wish to follow this option with `--require-services` to verify the new count.
+#### `--with-default` *target [subcommand args...]*
+
+Invoke `doco` *subcommand args...*, adding *target* to the current service set if the current set is empty.  *target* can be nonexistent or empty, so you may wish to follow this option with `--require-services` to verify the new count.
 
 ~~~shell
     $ doco -- --with-default alfa ps
@@ -655,20 +651,20 @@ This is the command-line equivalent of calling `require-services` *flag subcomma
 
 #### `cmd` *flag subcommand...*
 
-Shorthand for `--with-default cmd-default --require-services` *flag subcommand...*.  That is, if the current service set is empty, it defaults to the contents of the `cmd-default` alias, if any.  The number of services is then verified with `--require-services` before executing *subcommand*.  This makes it easy to define new subcommands that work on a default container or group of containers.  (For example, the `doco sh` command is defined as `doco cmd 1 exec bash "$@"` -- i.e., it runs on exactly one service, defaulting to the `cmd-default` alias.)
+Shorthand for `--with-default cmd-default --require-services` *flag subcommand...*.  That is, if the current service set is empty, it defaults to the `cmd-default` target, if defined.  The number of services is then verified with `--require-services` before executing *subcommand*.  This makes it easy to define new subcommands that work on a default container or group of containers.  (For example, the `doco sh` command is defined as `doco cmd 1 exec bash "$@"` -- i.e., it runs on exactly one service, defaulting to the `cmd-default` group.)
 
 ~~~shell
     $ (doco cmd 1 test)
     no services specified for test
     [64]
 
-    $ (set-alias cmd-default foxtrot; doco cmd 1 exec testme)
+    $ (GROUP cmd-default := foxtrot; doco cmd 1 exec testme)
     docker-compose exec foxtrot testme
 ~~~
 
 #### `cp` *[opts] src dest*
 
-Copy a file in or out of a service container.  Functions the same as `docker cp`, except that instead of using a container name as a prefix, you can use either a service name or an empty string (meaning, the currently-selected service).  So, e.g. `doco cp :/foo bar` copies `/foo` from the current service to `bar`, while `doco cp baz spam:/thing` copies `baz` to `/thing` inside the `spam` service's first container.  If no service is selected and no service name is given, the `shell-default` alias is tried.
+Copy a file in or out of a service container.  Functions the same as `docker cp`, except that instead of using a container name as a prefix, you can use either a service name or an empty string (meaning, the currently-selected service).  So, e.g. `doco cp :/foo bar` copies `/foo` from the current service to `bar`, while `doco cp baz spam:/thing` copies `baz` to `/thing` inside the `spam` service's first container.  If no service is selected and no service name is given, the `shell-default` target is tried.
 
 ~~~shell
 # Nominal cases
@@ -686,15 +682,15 @@ Copy a file in or out of a service container.  Functions the same as `docker cp`
     no services specified for cp
     [64]
 
-    $ (ALIAS shell-default bravo; doco cp :x y)
+    $ (GROUP shell-default += bravo; doco cp :x y)
     docker cp referencemd_bravo_1:x /*/Reference.md/y (glob)
 
-    $ (ALIAS shell-default bravo; LOCO_PWD=$PWD/t doco --with bravo cp y :x)
+    $ (GROUP shell-default += bravo; LOCO_PWD=$PWD/t doco bravo cp y :x)
     docker cp /*/Reference.md/t/y referencemd_bravo_1:x (glob)
 
 # Bad usages
 
-    $ (doco --with "too many" cp foo :bar)
+    $ (doco a b cp foo :bar)
     cp cannot be used on multiple services
     [64]
 
@@ -720,7 +716,7 @@ Copy a file in or out of a service container.  Functions the same as `docker cp`
 Execute the given `doco` subcommand once for each service in the current service set, with the service set restricted to a single service for each subcommand.  This can be useful for explicit multiple (or zero) execution of a command that is otherwise restricted in how many times it can be executed.
 
 ~~~shell
-    $ doco --with "x y" foreach ps
+    $ doco x y foreach ps
     docker-compose ps x
     docker-compose ps y
 
@@ -738,7 +734,7 @@ Execute the given `doco` subcommand once for each service in the current service
 
 #### `sh`
 
-`doco sh` *args...* executes `bash` *args* in the specified service's container.  If no service is specified, it defaults to the `cmd-default` alias.  Multiple services are not allowed.
+`doco sh` *args...* executes `bash` *args* in the specified service's container.  If no service is specified, it defaults to the `cmd-default` target.  Multiple services are not allowed.
 
 ~~~shell
     $ (doco sh)
@@ -752,6 +748,6 @@ Execute the given `doco` subcommand once for each service in the current service
     $ doco alfa sh
     docker-compose exec alfa bash
 
-    $ (ALIAS cmd-default foxtrot; doco sh -c 'echo foo')
+    $ (GROUP cmd-default += foxtrot; doco sh -c 'echo foo')
     docker-compose exec foxtrot bash -c echo\ foo
 ~~~

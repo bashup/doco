@@ -6,8 +6,8 @@
   * [`--` *[subcommand args...]*](#---subcommand-args)
   * [`--all` *subcommand args...*](#--all-subcommand-args)
   * [`--where` *jq-filter [subcommand args...]*](#--where-jq-filter-subcommand-args)
-  * [`--with` *service [subcommand args...]*](#--with-service-subcommand-args)
-  * [`--with-default` *alias [subcommand args...]*](#--with-default-alias-subcommand-args)
+  * [`--with` *target [subcommand args...]*](#--with-target-subcommand-args)
+  * [`--with-default` *target [subcommand args...]*](#--with-default-target-subcommand-args)
   * [`--require-services` *flag [subcommand args...]*](#--require-services-flag-subcommand-args)
 - [doco subcommands](#doco-subcommands)
   * [`cmd` *flag subcommand...*](#cmd-flag-subcommand)
@@ -45,7 +45,7 @@ Add services matching *jq-filter* to the current service set and invoke `doco` *
 doco.--where() {
     find-services "${@:1}"
     if (($#>1)); then
-        with-service "${REPLY[*]-}" doco "${@:2}"   # run command on matching services
+        with-targets "${REPLY[@]}" -- doco "${@:2}"   # run command on matching services
     elif ! ((${#REPLY[@]})); then
         echo "No matching services" >&2; return 1
     else
@@ -54,24 +54,25 @@ doco.--where() {
 }
 ```
 
-#### `--with` *service [subcommand args...]*
+#### `--with` *target [subcommand args...]*
 
-The `with`  subcommand adds one or more services to the current service set and invokes  `doco` *subcommand args...*.  The *service* argument is either a single service name or a string containing a space-separated list of service names.  `--with` can be given more than once.  (To reset the service set to empty, use `--`.)
+The `--with`  option adds one or more services or groups to the current service set and then invokes  `doco` *subcommand args...*.  The *target* argument is either a single service or group name, or a string containing a space-separated list of service or group names.  `--with` can be given more than once.  (To reset the service set to empty, use `--`.)
 
 ```shell
 # Execute the rest of the command line with specified service(s)
-doco.--with() { with-service "$1" doco "${@:2}"; }
+doco.--with() { mdsh-splitwords "$1"; with-targets "${REPLY[@]}" -- doco "${@:2}"; }
 ```
 
-At first glance, this command might appear redundant to simply adding the service names to the end of a regular command.  But since you can write custom subcommands that execute multiple docker commands, or that loop over `DOCO_SERVICES` to perform other operations (not to mention subcommands that invoke `with` with a preset list of services), it can come quite in handy.
+You don't normally need to use this option, because you can simply run `doco` *targets... subcommand...* in the first place.  It's really only useful in cases where you have service or group names that might conflict with other subcommand names, or need to store a set of group/service names in a non-array variable (e.g. in a `.env` file.)
 
-#### `--with-default` *alias [subcommand args...]*
+#### `--with-default` *target [subcommand args...]*
 
-Invoke `doco` *subcommand args...*, adding *alias* to the current service set if the current set is empty.  *alias* can be nonexistent or empty, so you may wish to follow this option with `--require-services` to verify the new count.
+Invoke `doco` *subcommand args...*, adding *target* to the current service set if the current set is empty.  *target* can be nonexistent or empty, so you may wish to follow this option with `--require-services` to verify the new count.
 
 ```shell
 doco.--with-default() {
-    if have-services ''; then doco "${@:2}"; else with-alias "$1" doco "${@:2}"; fi
+    if current-target has-count || ! target "$1" exists; then doco "${@:2}"
+    else with-targets "$1" -- doco "${@:2}"; fi
 }
 ```
 
@@ -91,7 +92,7 @@ doco.--require-services() {
 
 #### `cmd` *flag subcommand...*
 
-Shorthand for `--with-default cmd-default --require-services` *flag subcommand...*.  That is, if the current service set is empty, it defaults to the contents of the `cmd-default` alias, if any.  The number of services is then verified with `--require-services` before executing *subcommand*.  This makes it easy to define new subcommands that work on a default container or group of containers.  (For example, the `doco sh` command is defined as `doco cmd 1 exec bash "$@"` -- i.e., it runs on exactly one service, defaulting to the `cmd-default` alias.)
+Shorthand for `--with-default cmd-default --require-services` *flag subcommand...*.  That is, if the current service set is empty, it defaults to the `cmd-default` target, if defined.  The number of services is then verified with `--require-services` before executing *subcommand*.  This makes it easy to define new subcommands that work on a default container or group of containers.  (For example, the `doco sh` command is defined as `doco cmd 1 exec bash "$@"` -- i.e., it runs on exactly one service, defaulting to the `cmd-default` group.)
 
 ```shell
 doco.cmd() { doco --with-default cmd-default --require-services "$@"; }
@@ -99,7 +100,7 @@ doco.cmd() { doco --with-default cmd-default --require-services "$@"; }
 
 #### `cp` *[opts] src dest*
 
-Copy a file in or out of a service container.  Functions the same as `docker cp`, except that instead of using a container name as a prefix, you can use either a service name or an empty string (meaning, the currently-selected service).  So, e.g. `doco cp :/foo bar` copies `/foo` from the current service to `bar`, while `doco cp baz spam:/thing` copies `baz` to `/thing` inside the `spam` service's first container.  If no service is selected and no service name is given, the `shell-default` alias is tried.
+Copy a file in or out of a service container.  Functions the same as `docker cp`, except that instead of using a container name as a prefix, you can use either a service name or an empty string (meaning, the currently-selected service).  So, e.g. `doco cp :/foo bar` copies `/foo` from the current service to `bar`, while `doco cp baz spam:/thing` copies `baz` to `/thing` inside the `spam` service's first container.  If no service is selected and no service name is given, the `shell-default` target is tried.
 
 ```shell
 doco.cp() {
@@ -120,7 +121,7 @@ doco.cp() {
             seen=yes
             if [[ "${1%%:*}" ]]; then
                 project-name "${1%%:*}"; set -- "$REPLY:${1#*:}" "${@:2}"
-            elif ((${#DOCO_SERVICES[@]} == 1)); then
+            elif have-services '==1'; then
                 project-name "$DOCO_SERVICES"; set -- "$REPLY$1" "${@:2}"
             else
                 doco --with-default shell-default --require-services 1 cp ${opts[@]+"${opts[@]}"} "$@"; return $?
@@ -154,7 +155,7 @@ doco.jq() { RUN_JQ "$@" <"$DOCO_CONFIG"; }
 
 #### `sh`
 
-`doco sh` *args...* executes `bash` *args* in the specified service's container.  If no service is specified, it defaults to the `cmd-default` alias.  Multiple services are not allowed.
+`doco sh` *args...* executes `bash` *args* in the specified service's container.  If no service is specified, it defaults to the `cmd-default` target.  Multiple services are not allowed.
 
 ```shell
 doco.sh() { doco cmd 1 exec bash "$@"; }

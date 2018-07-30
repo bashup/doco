@@ -4,13 +4,15 @@ doco is an extensible tool for project automation and literate devops using dock
 
 In addition to letting you create custom commands and apply them to a configuration, you can also define your docker-compose configuration *and* custom commands as YAML, [jq](http://stedolan.github.io/jq/) code, and shell functions embedded in a markdown file.  In this way, you can document your project's configuration and custom commands directly alongside the code that implements them.
 
-Last, but not least, doco supports many ways of applying commands to one or more containers, which can be explicitly listed, qualified by jq queries against your configuration, or specified using aliases. If `group1` and `group2` are aliases you've defined in your configuration, then `doco group1 group2 ps `will expand to `docker-compose ps` *[services in group1] \[services in group 2]*.  You can also create subcommands that apply to a specific group or service by default, run single-container commands against each container in a group, and more.
+Last, but not least, doco supports many ways of applying commands to one or more containers, which can be explicitly listed, qualified by jq queries against your configuration, or specified using service groups. If `group1` and `group2` are groups you've defined in your configuration, then `doco group1 group2 ps `will expand to `docker-compose ps` *[services in group1] \[services in group 2]*.  You can also create subcommands that apply to a specific group or service by default, run single-container commands against each container in a group, and more.
 
 ## Installation and Basic Use
 
 doco is a mashup of [loco](https://github.com/bashup/loco) (for project configuration and subcommands) and [jqmd](https://github.com/bashup/jqmd) (for literate programming and jq support).  You can install it with [basher](https://github.com/basherpm/basher) (i.e. via `basher install bashup/doco`), or just copy the [binary](bin/doco) to a directory on your `PATH`.  You will need [jq](http://stedolan.github.io/jq/) and docker-compose on your `PATH` as well, along with either a yaml2json command (such as [this one](https://github.com/bronze1man/yaml2json)), PyYAML, or [yaml2json.php](https://packagist.org/packages/dirtsimple/yaml2json).
 
 In its simplest use, doco can be used to add custom commands to an existing docker-compose project: just create a `.doco` file alongside your `docker-compose.yml`, and define bash functions in it using the [doco API](docs/Reference.md#api) and [CLI](docs/Reference.md#command-line-interface).  A function named `doco.X` will define a doco subcommand `X`.
+
+(Note: due to array handling bugs and quirks in earlier versions of bash, doco requires **bash 4.4**.)
 
 ## Literate DevOps
 

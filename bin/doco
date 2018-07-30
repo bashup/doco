@@ -419,6 +419,8 @@ for lv in ${!LOCO_@}; do unset "$lv"; done
 
 LOCO_SCRIPT=$0
 loco_preconfig() {
+    set -- "${BASH_VERSINFO[@]}"
+    (( $1 > 4 || $1 == 4 && $2 >= 4 )) || mdsh-error "Sorry; doco requires bash 4.4 or better"
     export COMPOSE_PROJECT_NAME=
     LOCO_FILE=("?*[-.]doco.md" ".doco" "docker-compose.yml")
     LOCO_NAME=doco
@@ -465,17 +467,19 @@ check_multi() {
    # shellcheck disable=SC2012,SC2068  # we're using wc and glob expansion is intentional
    (("$(ls ${@:2} 2>/dev/null | wc -l)" < 2)) || loco_error "Multiple $1 files in $LOCO_ROOT"
 }
-ALIAS() {
-    local alias svc DOCO_SERVICES=()
-    (($#>1)) || loco_error "ALIAS requires at least two arguments"
-    SERVICES "${@:2}"; mdsh-splitwords "$1"
-    for alias in "${REPLY[@]}"; do __mkalias "$alias" "${@:2}"; done
+GROUP() {
+    (($#>1)) || loco_error "GROUP requires at least two arguments"
+    local op groups=(); while (($#)) && [[ $1 != [+:]= ]]; do groups+=("$1"); shift; done
+    for svc in "${@:2}"; do target "$svc" exists || target "$svc" declare-service; done
+    case "${1-}" in
+        +=) op='add' ;;
+        :=) op='set' ;;
+        *) fail "GROUP needs += or :=" || return
+    esac
+    [[ ${groups[*]-} ]] || fail "No groups given" || return
+    for REPLY in "${groups[@]}"; do target "$REPLY" "$op" "${@:2}"; done
 }
-__mkalias() {
-     if (($#)); then with-alias "$1" __mkalias "${@:2}"; return; fi
-     set-alias "$alias" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}
-}
-SERVICES() { for svc in "$@"; do alias-exists "$svc" || set-alias "$svc" "$svc"; done; }
+SERVICES() { for REPLY; do target "$REPLY" declare-service; done; }
 VERSION() { FILTER ".version=\"$1\""; }
 export-env() {
     while IFS= read -r; do
@@ -500,16 +504,119 @@ include() {
         @require "doco-include:$REPLY" __include "$@"
     fi
 }
-alias-exists() { fn-exists "doco-alias-$1"; }
+#!/usr/bin/env bash
+event(){ case $1 in error|quote|encode|decode);; *)
+	__ev.encode "${2-}";local f n='' e=bashup_event_$REPLY;f=${e/event/flag}
+	case $1 in emit) shift;${!f-};eval "${!e-}"; return ;;on|once|off|has)
+		case "${3-}" in @_) n='$#';; @*[^0-9]*);; @[0-9]*) n=$((${3#@}));; esac; ${n:+
+		set -- "$1" "$2" "${@:4}" }
+		case $1/$# in
+			has/[12]) REPLY=;; */[12]) set -- error "${2-}: missing callback";;
+			*) __ev.quote "${@:3}";((${n/\$#/1}))&&REPLY+=' "${@:2:'"$n"'}"';REPLY+=$'\n'
+		esac
+	esac
+esac ;__ev."$@";}
+__ev.error(){ echo "$1">&2;return "${2:-64}";}
+__ev.quote(){ REPLY=; ${@+printf -v REPLY ' %q' "$@"}; REPLY=${REPLY# };}
+__ev.has(){ [[ ${!e-} && $'\n'"${!e}" == *$'\n'"$REPLY"* && ! ${!f-} ]];}
+__ev.on(){ __ev.has && return;if [[ ! ${!f-} ]];then eval "$e"+='$REPLY';else eval "${!e-};$REPLY";fi;}
+__ev.off(){ __ev.has||return 0; n="${!e}"; n=${n#"$REPLY"}; eval "$e"=$'"${n//\n"$REPLY"/\n}"';}
+__ev.fire(){ ${!f-};set -- "$e" "${@:2}"; while [[ ${!1-} ]];do eval "$1=;${!1}"; done ;}
+__ev.all(){ ${!f-};e=${!e-};eval "${e//$'\n'/||return; }";}
+__ev.any(){ ${!f-};e=${!e-};eval "${e//$'\n'/&&return|| } ! :";}
+__ev.resolve(){
+	${!f-};__ev.fire "$@";__ev.quote "$@"
+	readonly "$f=eval __ev.error 'event \"'$1'\" already resolved' 70;return" "$e=set -- $REPLY"
+}
+__ev.resolved(){ [[ ${!f-} ]];}
+__ev.once(){ n=${n:-0} n=${n/\$#/_}; event on "$1" "@$n" __ev_once $# "@$n" "$@";}
+__ev_once(){ event off "$3" "$2" __ev_once "${@:1:$1+2}"; "${@:4}";}
+__ev_jit(){
+	local r=${__ev_jit-} s=$1;((${#r}<250))||__ev_jit=
+	while [[ "$s" ]]; do
+		r=${s::1};s=${s//$r/};printf -v r 'REPLY=${REPLY//%q/_%02x};' "$r" "'$r";eval "$r";__ev_jit+=$r
+	done
+	eval '__ev.encode(){ local LC_ALL=C;REPLY=${1//_/_5f};'\
+	"${__ev_jit-}"' [[ $REPLY != *[^_[:alnum:]]* ]] || __ev_jit "${REPLY//[_[:alnum:]]/}";}'
+};__ev_jit ''
+__ev.decode(){ REPLY=();while (($#));do printf -v REPLY[${#REPLY[@]}] %b "${1//_/\\x}";shift;done;}
+__ev.list(){ eval 'set -- "${!'"$e"'@}"';__ev.decode "${@#bashup_event_}";}
+is-target-name() { [[ $1 && $1 != *[^-._A-Za-z0-9]* ]]; }
+
+target() {
+	is-target-name "$1" ||
+		fail "Group or service name '$1' contains invalid characters" || return
+	local TARGET_NAME="$1" TARGET_VAR=${1//_/_5f}
+	TARGET_VAR=${TARGET_VAR//./_2e}; TARGET_VAR=__doco_target_${1//-/_2d}
+	local -n TARGET="$TARGET_VAR"
+	local TARGET_OLD=${TARGET[*]-} __mro__=(doco-target); this "${@:2}"
+}
+
+fail() { echo "$1">&2; return "${2-64}"; }
+this() { ! (($#)) || "${__mro__[0]}::$@"; } # XXX
+doco-target::is-service() { [[ ${TARGET[*]-} == "$TARGET_NAME" ]]; }
+doco-target::is-group() { this exists && ! this is-service; }
+doco-target::exists() { [[ ${TARGET+_} ]] || declare -p "$TARGET_VAR" >/dev/null 2>&1; }
+
+doco-target::declare-service() {
+	if ! this exists; then
+		TARGET=("$TARGET_NAME"); event emit "create-service" "$TARGET_NAME" "$TARGET_NAME"
+		this "$@"
+	elif ! this is-service; then
+		fail "$TARGET_NAME is a group, but a service was expected"
+	fi
+}
+
+doco-target::declare-group() {
+	if ! this exists; then
+		TARGET=(); event emit "create-group" "$TARGET_NAME"
+		this "$@"
+	elif this is-service; then
+		fail "$TARGET_NAME is a service, but a group was expected"
+	fi
+}
+doco-target::get() { REPLY=("${TARGET[@]}"); this "${1-exists}" "${@:2}"; }
+doco-target::has-count() { eval "(( ${#TARGET[@]} ${1-} ))"; }
+
+doco-target::add() {
+	this declare-group || return
+	while (($#)); do
+		target "$1" get || fail "'$1' is not a known group or service" || return
+		for REPLY in "${REPLY[@]}"; do
+			[[ " ${TARGET[*]-} " == *" $REPLY "* ]] || TARGET+=("$REPLY")
+		done
+		shift
+	done
+	if [[ ${TARGET[*]-} != "$TARGET_OLD" ]]; then
+		event emit "change-group" "$TARGET_NAME" "${TARGET[@]}"
+	fi
+}
+
+doco-target::set() {
+	this declare-group || return; TARGET=(); this add "$@"
+}
+current-target() {
+	local TARGET_NAME="@current" TARGET_VAR=DOCO_SERVICES; local -n TARGET="$TARGET_VAR"
+	local TARGET_OLD=${TARGET[*]-} __mro__=(doco-target); this "$@"
+}
+
+doco-target::call() {
+	if [[ $TARGET_NAME == "@current" ]]; then "$@"
+	else with-targets "$TARGET_NAME" -- "$@"; fi
+}
+
+with-targets() {
+	REPLY=(); while (($#)) && [[ $1 != -- ]]; do REPLY+=("$1"); shift; done
+	local DOCO_SERVICES=("${DOCO_SERVICES[@]}")
+	current-target add "${REPLY[@]}"; "${@:2}"
+}
 find-services() { REPLY=$(RUN_JQ -r "services_matching(${1-true}) | .key" "$DOCO_CONFIG") && IFS=$'\n' mdsh-splitwords "$REPLY"; }
 foreach-service() {
     for REPLY in ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}; do
         local DOCO_SERVICES=("$REPLY"); "$@"
     done
 }
-get-alias() { REPLY=(); ! alias-exists "$1" || "doco-alias-$1"; }
-# shellcheck disable=SC2120  # shellcheck doesn't understand optional arguments
-have-services() { eval "((${#DOCO_SERVICES[@]} ${1-}))"; }
+have-services() { current-target has-count "$@"; }
 project-name() {
     REPLY=${COMPOSE_PROJECT_NAME-}
     [[ $REPLY ]] || realpath.basename "$LOCO_ROOT"   # default to directory name
@@ -523,28 +630,31 @@ require-services() {
     [-1]*) loco_error "$2 cannot be used on multiple services" ;;
     esac
 }
-set-alias() {
-    local t=; (($#<2)) || printf -v t ' %q' "${@:2}"
-    printf -v t 'doco-alias-%s() { REPLY=(%s); }' "$1" "$t"; eval "$t";
-    printf -v t '| (.services."%s" |= f ) ' "${@:2}"
-    DEFINE "def ${1//[^_[:alnum:]]/_}(f): . $t;"  # jqmd function names have a limited charset
-}
-with-alias() { get-alias "$1"; with-service "${REPLY[*]-}" "${@:2}"; }
-with-service() {
-    local svc DOCO_SERVICES=(${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"})
-    for svc in $1; do
-        [[ " ${DOCO_SERVICES[*]-} " == *" $svc "* ]] || DOCO_SERVICES+=("$svc")
-    done
-    "${@:2}"
-}
 mdsh_raw_jq_api+=($'def services: if .services // .version then .services else . end;\n')
 mdsh_raw_jq_api+=($'def services_matching(f): services | to_entries | .[] | select( .value | f ) ;\n')
+event on "change-group"   @_ generate-jq-func
+event on "create-service" @_ generate-jq-func
+
+generate-jq-func() {
+    if [[ $1 != "@current" ]]; then
+        local t; printf -v t '| (.services."%s" |= f ) ' "${@:2}"
+        # jq function names can only have '_' or '::', not '-' or '.'
+        set -- "${1//-/::dash::}"; set -- "${1//./::dot::}"; set -- "${1/#::/_::}"
+        DEFINE "def $1(f): ${t:2};"
+    fi
+}
+ALIAS() { mdsh-splitwords "$1"; GROUP "${REPLY[@}}" += "$@"; }
+alias-exists() { target "$1" exists; }
+get-alias() { target "$1" get || true; }
+set-alias() { target "$1" set "$@"; }
+with-alias() { target "$1" call "${@:2}"; }
+with-service() { mdsh-splitwords "$1"; with-targets "${REPLY[@]}" -- "${@:2}"; }
 DOCO_OPTS=()
 compose() { docker-compose ${DOCO_OPTS[@]+"${DOCO_OPTS[@]}"} "$@"; }
 DOCO_SERVICES=()
 loco_exec() {
-    if alias-exists "$1"; then
-        with-alias "$1" ${2+doco "${@:2}"};
+    if is-target-name "$1" && target "$1" exists; then
+        target "$1" call ${2+doco "${@:2}"};
     else
         compose "$@" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"};
     fi
@@ -604,7 +714,7 @@ doco.--all() { doco --where true "$@"; }
 doco.--where() {
     find-services "${@:1}"
     if (($#>1)); then
-        with-service "${REPLY[*]-}" doco "${@:2}"   # run command on matching services
+        with-targets "${REPLY[@]}" -- doco "${@:2}"   # run command on matching services
     elif ! ((${#REPLY[@]})); then
         echo "No matching services" >&2; return 1
     else
@@ -612,9 +722,10 @@ doco.--where() {
     fi
 }
 # Execute the rest of the command line with specified service(s)
-doco.--with() { with-service "$1" doco "${@:2}"; }
+doco.--with() { mdsh-splitwords "$1"; with-targets "${REPLY[@]}" -- doco "${@:2}"; }
 doco.--with-default() {
-    if have-services ''; then doco "${@:2}"; else with-alias "$1" doco "${@:2}"; fi
+    if current-target has-count || ! target "$1" exists; then doco "${@:2}"
+    else with-targets "$1" -- doco "${@:2}"; fi
 }
 doco.--require-services() {
     [[ ${1:0:1} == [-+1.] ]] || loco_error "--require-services argument must begin with ., -, +, or 1"
