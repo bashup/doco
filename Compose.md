@@ -30,10 +30,9 @@ compose() { docker-compose ${DOCO_OPTS[@]+"${DOCO_OPTS[@]}"} "$@"; }
 Unrecognized subcommands are first checked to see if they're a valid service or group.  If not, they're sent to docker-compose, with the current service set appended to the command line.  (The service set is empty by default, causing docker-compose to apply commands to all services by default.)
 
 ```shell
-DOCO_SERVICES=()
 loco_exec() {
     if is-target-name "$1" && target "$1" exists; then
-        target "$1" call ${2+doco "${@:2}"};
+        with-targets @current "$1" -- ${2+doco "${@:2}"};
     else
         compose "$@" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"};
     fi
@@ -72,7 +71,7 @@ __compose_one() {
         argv+=("$1"); if [[ $1 =~ $opts ]]; then shift; argv+=("$1"); fi
     done
 
-    if ((${#DOCO_SERVICES[@]})); then
+    if have-services; then
         for svc in "${DOCO_SERVICES[@]}"; do compose "${argv[@]}" "$svc" "$@"; done
     else
         # XXX should check that $1 is a valid service

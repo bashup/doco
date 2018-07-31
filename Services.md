@@ -24,7 +24,7 @@ Invoke *cmd args...* once for each service in the current service set; the servi
 ```shell
 foreach-service() {
     for REPLY in ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}; do
-        local DOCO_SERVICES=("$REPLY"); "$@"
+        with-targets "$REPLY" -- "$@"
     done
 }
 ```
@@ -34,7 +34,7 @@ foreach-service() {
 Return true if the current service count matches the bash numeric comparison *compexpr*; if no *compexpr* is supplied, returns true if the current service count is non-zero.
 
 ```shell
-have-services() { current-target has-count "$@"; }
+have-services() { target @current has-count "$@"; }
 ```
 
 #### `project-name` *[service index]*
@@ -58,11 +58,11 @@ Checks the number of currently selected services, based on *flag*.  If flag is `
 
 ```shell
 require-services() {
-    current-target get || REPLY=()
+    local REPLY=("${DOCO_SERVICES[@]}")
     case "$1${#REPLY[@]}" in
     ?1|-0|.*) return ;;  # 1 is always acceptable
-    ?0)    loco_error "no services specified for $2" ;;
-    [-1]*) loco_error "$2 cannot be used on multiple services" ;;
+    ?0)    fail "no services specified for $2" ;;
+    [-1]*) fail "$2 cannot be used on multiple services" ;;
     esac
 }
 ```
@@ -113,6 +113,6 @@ alias-exists() { target "$1" exists; }
 get-alias() { target "$1" get || true; }
 set-alias() { target "$1" set "$@"; }
 with-alias() { target "$1" call "${@:2}"; }
-with-service() { mdsh-splitwords "$1"; with-targets "${REPLY[@]}" -- "${@:2}"; }
+with-service() { mdsh-splitwords "$1"; with-targets @current "${REPLY[@]}" -- "${@:2}"; }
 ```
 

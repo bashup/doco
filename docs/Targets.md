@@ -152,51 +152,77 @@ Groups can be `set` to a list of targets (i.e., existing services or groups), dr
 
 ### The Current Target
 
-The `current-target` API accesses a special group whose contents are stored in the `DOCO_SERVICES` variable.  It is used to designate what service names will be passed to docker-compose for a given command.  Events for the current target are issued with `@current` as the target name.
+A special target `@current` is used to access a special read-only group whose contents are stored in the `DOCO_SERVICES` variable.  It is used to designate what service names will be passed to docker-compose for a given command.
 
 ~~~shell
-    $ unset DOCO_SERVICES[@]
+    $ declare -p DOCO_SERVICES
+    *: declare: DOCO_SERVICES: not found (glob)
+    [1]
 
-    $ current-target exists || echo nope
+    $ target @current exists || echo nope
     nope
 
-    $ current-target add nosuch
-    created group: @current
-    group changed: @current aService svc2
+    $ target @current add nosuch
+    @current group is read-only
+    [64]
 
-    $ declare -p DOCO_SERVICES
-    declare -a DOCO_SERVICES=([0]="aService" [1]="svc2")
-
-    $ current-target set   # reset to empty array
-    group changed: @current
 ~~~
 
-The current target can be added to for the duration of one command/function call using `call`:
+The current target can be set for the duration of one command/function call using `with-targets` *targets...* `--` *command...*, during which the `DOCO_SERVICES` variable will be read-only, but still changeable using `with-targets`.  You can include `@current` in the target list, to merge the other targets with the current target set:
 
 ~~~shell
-    $ target "nosuch" call declare -p DOCO_SERVICES
-    group changed: @current aService svc2
-    declare -a DOCO_SERVICES=([0]="aService" [1]="svc2")
+# with-targets expands groups, and issues change events for @current
 
-    $ declare -p DOCO_SERVICES   # back to normal
-    declare -a DOCO_SERVICES=()
-~~~
+    $ with-targets "nosuch" -- declare -p DOCO_SERVICES
+    declare -ar DOCO_SERVICES=([0]="aService" [1]="svc2")
 
-Or an arbitrary number of targets can be added using `with-targets` *targets...* `--` *command...*
+    $ declare -p DOCO_SERVICES   # back to not existing
+    *: declare: DOCO_SERVICES: not found (glob)
+    [1]
 
-```shell
     $ with-targets -- declare -p DOCO_SERVICES
-    declare -a DOCO_SERVICES=()
+    declare -ar DOCO_SERVICES=()
 
     $ with-targets svc2 -- declare -p DOCO_SERVICES
-    group changed: @current svc2
-    declare -a DOCO_SERVICES=([0]="svc2")
+    declare -ar DOCO_SERVICES=([0]="svc2")
 
-    $ with-targets aService svc2 -- declare -p DOCO_SERVICES
-    group changed: @current aService svc2
-    declare -a DOCO_SERVICES=([0]="aService" [1]="svc2")
+# with-targets can stack, and target list can inlcude @current to merge
+
+    $ with-targets aService -- with-targets @current svc2 -- declare -p DOCO_SERVICES
+    declare -ar DOCO_SERVICES=([0]="aService" [1]="svc2")
 
     $ declare -p DOCO_SERVICES
-    declare -a DOCO_SERVICES=()
-```
+    *: declare: DOCO_SERVICES: not found (glob)
+    [1]
+
+~~~
+
+### Finding and Merging Targets
+
+The `all-targets` function takes one or more target names, and sets `REPLY` to a unique array of the service names referenced by those targets, returning success unless any of the named targets are invalid or undefined.  (As a special case, `@current` not existing is treated as if it did exist, but was empty.)
+
+The `any-targets` function takes one or more target names, and sets `REPLY` to the array of services referenced by the first target that `exists`, whether that target is empty or not.  (But `@current` is not treated specially; if non-existent, it's skipped.)  Success is returned unless none of the supplied targets exist.
+
+~~~shell
+# all-targets returns unique items from all the named targets
+
+    $ all-targets nosuch aService && echo "${#REPLY[@]} items:" "${REPLY[@]}"
+    2 items: aService svc2
+
+# but fails if any targets (other than @current) don't exist:
+
+    $ all-targets svc2 @current not-defined
+    'not-defined' is not a known group or service
+    [64]
+
+# any-target returns failure if no target exists:
+
+    $ any-target @current not-defined || echo nope
+    nope
+
+# or success and contents of first matching target:
+
+    $ any-target @current aService && echo "${#REPLY[@]} items:" "${REPLY[@]}"
+    1 items: aService
+~~~
 

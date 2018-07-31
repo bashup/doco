@@ -544,16 +544,27 @@ __ev.list(){ eval 'set -- "${!'"$e"'@}"';__ev.decode "${@#bashup_event_}";}
 is-target-name() { [[ $1 && $1 != *[^-._A-Za-z0-9]* ]]; }
 
 target() {
-	is-target-name "$1" ||
-		fail "Group or service name '$1' contains invalid characters" || return
-	local TARGET_NAME="$1" TARGET_VAR=${1//_/_5f}
-	TARGET_VAR=${TARGET_VAR//./_2e}; TARGET_VAR=__doco_target_${1//-/_2d}
+	local TARGET_NAME="$1" __mro__=(doco-target)
+	if is-target-name "$1"; then
+		local t=${1//_/_5f}; t=${t//./_2e}; t=${t//-/_2d}
+		local TARGET_VAR=__doco_target_$t
+	elif [[ $1 == @current ]]; then
+		local TARGET_VAR=DOCO_SERVICES __mro__=(@current-target doco-target)
+	else fail "Group or service name '$1' contains invalid characters" || return
+	fi
 	local -n TARGET="$TARGET_VAR"
-	local TARGET_OLD=${TARGET[*]-} __mro__=(doco-target); this "${@:2}"
+	local TARGET_OLD=${TARGET[*]-}
+	this "${@:2}"
 }
 
 fail() { echo "$1">&2; return "${2-64}"; }
-this() { ! (($#)) || "${__mro__[0]}::$@"; } # XXX
+this() {
+	if (($#)); then
+		local m; for m in "${__mro__[@]}"; do if fn-exists "$m::$1"; then break; fi; done
+		"$m::$@"
+	fi
+}
+
 doco-target::is-service() { [[ ${TARGET[*]-} == "$TARGET_NAME" ]]; }
 doco-target::is-group() { this exists && ! this is-service; }
 doco-target::exists() { [[ ${TARGET+_} ]] || declare -p "$TARGET_VAR" >/dev/null 2>&1; }
@@ -575,48 +586,61 @@ doco-target::declare-group() {
 		fail "$TARGET_NAME is a service, but a group was expected"
 	fi
 }
-doco-target::get() { REPLY=("${TARGET[@]}"); this "${1-exists}" "${@:2}"; }
-doco-target::has-count() { eval "(( ${#TARGET[@]} ${1-} ))"; }
 
-doco-target::add() {
+doco-target::get() { REPLY=("${TARGET[@]}"); this "${1-exists}" "${@:2}"; }
+doco-target::has-count() { REPLY=("${TARGET[@]}"); eval "(( ${#REPLY[@]} ${1-} ))"; }
+
+doco-target::add() { this set "$TARGET_NAME" "$@"; }
+doco-target::set() {
 	this declare-group || return
-	while (($#)); do
-		target "$1" get || fail "'$1' is not a known group or service" || return
-		for REPLY in "${REPLY[@]}"; do
-			[[ " ${TARGET[*]-} " == *" $REPLY "* ]] || TARGET+=("$REPLY")
-		done
-		shift
-	done
+	all-targets "$@" || return
+    TARGET=("${REPLY[@]}")
 	if [[ ${TARGET[*]-} != "$TARGET_OLD" ]]; then
 		event emit "change-group" "$TARGET_NAME" "${TARGET[@]}"
 	fi
 }
 
-doco-target::set() {
-	this declare-group || return; TARGET=(); this add "$@"
-}
-current-target() {
-	local TARGET_NAME="@current" TARGET_VAR=DOCO_SERVICES; local -n TARGET="$TARGET_VAR"
-	local TARGET_OLD=${TARGET[*]-} __mro__=(doco-target); this "$@"
-}
-
-doco-target::call() {
-	if [[ $TARGET_NAME == "@current" ]]; then "$@"
-	else with-targets "$TARGET_NAME" -- "$@"; fi
-}
+@current-target::set() { fail "@current group is read-only"; }
+@current-target::declare-service() { fail "@current is a group, but a service was expected"; }
+@current-target::declare-group() { :; }
 
 with-targets() {
-	REPLY=(); while (($#)) && [[ $1 != -- ]]; do REPLY+=("$1"); shift; done
-	local DOCO_SERVICES=("${DOCO_SERVICES[@]}")
-	current-target add "${REPLY[@]}"; "${@:2}"
+	local s=(); while (($#)) && [[ $1 != -- ]]; do s+=("$1"); shift; done
+	all-targets "${s[@]}" || return
+	# oh bash, why do you hate us so...
+	local DOCO_SERVICES; DOCO_SERVICES=("${REPLY[@]}"); readonly DOCO_SERVICES
+	"${@:2}"
 }
+
+# set REPLY to merge of all given target names
+all-targets() {
+	local services=()
+	while (($#)); do
+		target "$1" get || [[ $1 == @current ]] ||
+			fail "'$1' is not a known group or service" || return
+		for REPLY in "${REPLY[@]}"; do
+			[[ " ${services[*]-} " == *" $REPLY "* ]] || services+=("$REPLY")
+		done
+		shift
+	done
+	REPLY=("${services[@]}")
+}
+
+# set REPLY to contents of the first existing target
+any-target() {
+	for REPLY; do
+		if target "$REPLY" get; then return ; fi
+	done
+	REPLY=(); false
+}
+
 find-services() { REPLY=$(RUN_JQ -r "services_matching(${1-true}) | .key" "$DOCO_CONFIG") && IFS=$'\n' mdsh-splitwords "$REPLY"; }
 foreach-service() {
     for REPLY in ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}; do
-        local DOCO_SERVICES=("$REPLY"); "$@"
+        with-targets "$REPLY" -- "$@"
     done
 }
-have-services() { current-target has-count "$@"; }
+have-services() { target @current has-count "$@"; }
 project-name() {
     REPLY=${COMPOSE_PROJECT_NAME-}
     [[ $REPLY ]] || realpath.basename "$LOCO_ROOT"   # default to directory name
@@ -624,10 +648,11 @@ project-name() {
     ! (($#)) || REPLY=$REPLY"_${1}_${2-1}"           # container name
 }
 require-services() {
-    case "$1${#DOCO_SERVICES[@]}" in
+    local REPLY=("${DOCO_SERVICES[@]}")
+    case "$1${#REPLY[@]}" in
     ?1|-0|.*) return ;;  # 1 is always acceptable
-    ?0)    loco_error "no services specified for $2" ;;
-    [-1]*) loco_error "$2 cannot be used on multiple services" ;;
+    ?0)    fail "no services specified for $2" ;;
+    [-1]*) fail "$2 cannot be used on multiple services" ;;
     esac
 }
 mdsh_raw_jq_api+=($'def services: if .services // .version then .services else . end;\n')
@@ -648,13 +673,12 @@ alias-exists() { target "$1" exists; }
 get-alias() { target "$1" get || true; }
 set-alias() { target "$1" set "$@"; }
 with-alias() { target "$1" call "${@:2}"; }
-with-service() { mdsh-splitwords "$1"; with-targets "${REPLY[@]}" -- "${@:2}"; }
+with-service() { mdsh-splitwords "$1"; with-targets @current "${REPLY[@]}" -- "${@:2}"; }
 DOCO_OPTS=()
 compose() { docker-compose ${DOCO_OPTS[@]+"${DOCO_OPTS[@]}"} "$@"; }
-DOCO_SERVICES=()
 loco_exec() {
     if is-target-name "$1" && target "$1" exists; then
-        target "$1" call ${2+doco "${@:2}"};
+        with-targets @current "$1" -- ${2+doco "${@:2}"};
     else
         compose "$@" ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"};
     fi
@@ -677,7 +701,7 @@ __compose_one() {
         argv+=("$1"); if [[ $1 =~ $opts ]]; then shift; argv+=("$1"); fi
     done
 
-    if ((${#DOCO_SERVICES[@]})); then
+    if have-services; then
         for svc in "${DOCO_SERVICES[@]}"; do compose "${argv[@]}" "$svc" "$@"; done
     else
         # XXX should check that $1 is a valid service
@@ -709,7 +733,7 @@ doco.--file() { doco -f "$@"; }
 doco.--project-name() { doco -p "$@"; }
 doco.--project-directory() { loco_error "doco: --project-directory cannot be overridden"; }
 # Execute the rest of the command line with NO specified service(s)
-doco.--()   { local DOCO_SERVICES=(); doco "$@"; }
+doco.--()   { with-targets -- doco "$@"; }
 doco.--all() { doco --where true "$@"; }
 doco.--where() {
     find-services "${@:1}"
@@ -722,9 +746,9 @@ doco.--where() {
     fi
 }
 # Execute the rest of the command line with specified service(s)
-doco.--with() { mdsh-splitwords "$1"; with-targets "${REPLY[@]}" -- doco "${@:2}"; }
+doco.--with() { mdsh-splitwords "$1"; with-targets @current "${REPLY[@]}" -- doco "${@:2}"; }
 doco.--with-default() {
-    if current-target has-count || ! target "$1" exists; then doco "${@:2}"
+    if target @current has-count || ! target "$1" exists; then doco "${@:2}"
     else with-targets "$1" -- doco "${@:2}"; fi
 }
 doco.--require-services() {
@@ -751,7 +775,7 @@ doco.cp() {
             seen=yes
             if [[ "${1%%:*}" ]]; then
                 project-name "${1%%:*}"; set -- "$REPLY:${1#*:}" "${@:2}"
-            elif ((${#DOCO_SERVICES[@]} == 1)); then
+            elif have-services '==1'; then
                 project-name "$DOCO_SERVICES"; set -- "$REPLY$1" "${@:2}"
             else
                 doco --with-default shell-default --require-services 1 cp ${opts[@]+"${opts[@]}"} "$@"; return $?

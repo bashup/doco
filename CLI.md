@@ -26,7 +26,7 @@ Reset the active service set to empty.  This can be used to ensure a command is 
 
 ```shell
 # Execute the rest of the command line with NO specified service(s)
-doco.--()   { local DOCO_SERVICES=(); doco "$@"; }
+doco.--()   { with-targets -- doco "$@"; }
 ```
 
 #### `--all` *subcommand args...*
@@ -60,7 +60,7 @@ The `--with`  option adds one or more services or groups to the current service 
 
 ```shell
 # Execute the rest of the command line with specified service(s)
-doco.--with() { mdsh-splitwords "$1"; with-targets "${REPLY[@]}" -- doco "${@:2}"; }
+doco.--with() { mdsh-splitwords "$1"; with-targets @current "${REPLY[@]}" -- doco "${@:2}"; }
 ```
 
 You don't normally need to use this option, because you can simply run `doco` *targets... subcommand...* in the first place.  It's really only useful in cases where you have service or group names that might conflict with other subcommand names, or need to store a set of group/service names in a non-array variable (e.g. in a `.env` file.)
@@ -71,7 +71,7 @@ Invoke `doco` *subcommand args...*, adding *target* to the current service set i
 
 ```shell
 doco.--with-default() {
-    if current-target has-count || ! target "$1" exists; then doco "${@:2}"
+    if target @current has-count || ! target "$1" exists; then doco "${@:2}"
     else with-targets "$1" -- doco "${@:2}"; fi
 }
 ```

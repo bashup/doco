@@ -28,7 +28,6 @@
       - [`include` *markdownfile [cachefile]*](#include-markdownfile-cachefile)
       - [`project-name` *[service index]*](#project-name-service-index)
       - [`require-services` *flag command-name*](#require-services-flag-command-name)
-      - [`target` *target* `call` *command...*](#target-target-call-command)
       - [`with-targets` *target(s)* `--` *command...*](#with-targets-targets----command)
     + [jq API](#jq-api)
       - [`services`](#services)
@@ -393,7 +392,7 @@ Checks the number of currently selected services, based on *flag*.  If flag is `
 ~~~shell
 # Test harness:
     $ SERVICES x y
-    $ doco.test-rs() { require-services "$1" test-rs; echo success; }
+    $ doco.test-rs() { require-services "$1" test-rs || return; echo success; }
     $ test-rs() { (doco -- "${@:2}" test-rs "$1") || echo "[$?]"; }
     $ test-rs-all() { test-rs $1; test-rs $1 x y; test-rs $1 foo; }
 
@@ -426,21 +425,12 @@ Checks the number of currently selected services, based on *flag*.  If flag is `
     success
 ~~~
 
-#### `target` *target* `call` *command...*
-
-Run *command...* with the expansion of *target* added to the current service set (without duplicating existing services).   (Note that *command* is a shell command, not a `doco` subcommand!)
-
-~~~shell
-    $ target fiz call eval $'printf \'%q\n\' "${DOCO_SERVICES[@]}"'
-    bar
-~~~
-
 #### `with-targets` *target(s)* `--` *command...*
 
-Run command with *target(s)* added to the current service set (without duplicating existing services).  Note that *command* is a shell command, not a `doco` subcommand!
+Run command with *target(s)* as the current service set.  Include `@current` as a target to expand the existing service set (without duplicating existing services).  Note that *command* is a shell command/function, not a `doco` subcommand!
 
 ~~~shell
-    $ with-targets foo bar -- with-targets bar baz -- eval $'printf \'%q\n\' "${DOCO_SERVICES[@]}"'
+    $ with-targets foo bar -- with-targets @current bar baz -- eval $'printf \'%q\n\' "${DOCO_SERVICES[@]}"'
     foo
     bar
     baz

@@ -1,21 +1,32 @@
 ## Targets API (Services and Groups)
 
-Targets are implemented as array variables named in the form `__doco_target_X`, where `X` is the encoded form of a docker-compatible container name.  (i.e. with `_`, `.` and `-` escaped)
+Targets are implemented as array variables named in the form `__doco_target_X`, where `X` is the encoded form of a docker-compatible container name.  (i.e. with `_`, `.` and `-` escaped)  The `@current` target, however, is stored in `DOCO_SERVICES`.
 
 ```shell
 is-target-name() { [[ $1 && $1 != *[^-._A-Za-z0-9]* ]]; }
 
 target() {
-	is-target-name "$1" ||
-		fail "Group or service name '$1' contains invalid characters" || return
-	local TARGET_NAME="$1" TARGET_VAR=${1//_/_5f}
-	TARGET_VAR=${TARGET_VAR//./_2e}; TARGET_VAR=__doco_target_${TARGET_VAR//-/_2d}
+	local TARGET_NAME="$1" __mro__=(doco-target)
+	if is-target-name "$1"; then
+		local t=${1//_/_5f}; t=${t//./_2e}; t=${t//-/_2d}
+		local TARGET_VAR=__doco_target_$t
+	elif [[ $1 == @current ]]; then
+		local TARGET_VAR=DOCO_SERVICES __mro__=(@current-target doco-target)
+	else fail "Group or service name '$1' contains invalid characters" || return
+	fi
 	local -n TARGET="$TARGET_VAR"
-	local TARGET_OLD=${TARGET[*]-} __mro__=(doco-target); this "${@:2}"
+	local TARGET_OLD=${TARGET[*]-}
+	this "${@:2}"
 }
 
 fail() { echo "$1">&2; return "${2-64}"; }
-this() { ! (($#)) || "${__mro__[0]}::$@"; } # XXX
+this() {
+	if (($#)); then
+		local m; for m in "${__mro__[@]}"; do if fn-exists "$m::$1"; then break; fi; done
+		"$m::$@"
+	fi
+}
+
 ```
 
 ### Target Types
@@ -44,6 +55,7 @@ doco-target::declare-group() {
 		fail "$TARGET_NAME is a service, but a group was expected"
 	fi
 }
+
 ```
 
 ### Target Contents
@@ -52,44 +64,65 @@ doco-target::declare-group() {
 doco-target::get() { REPLY=("${TARGET[@]}"); this "${1-exists}" "${@:2}"; }
 doco-target::has-count() { REPLY=("${TARGET[@]}"); eval "(( ${#REPLY[@]} ${1-} ))"; }
 
-doco-target::add() {
+doco-target::add() { this set "$TARGET_NAME" "$@"; }
+doco-target::set() {
 	this declare-group || return
-	while (($#)); do
-		target "$1" get || fail "'$1' is not a known group or service" || return
-		for REPLY in "${REPLY[@]}"; do
-			[[ " ${TARGET[*]-} " == *" $REPLY "* ]] || TARGET+=("$REPLY")
-		done
-		shift
-	done
+	all-targets "$@" || return
+    TARGET=("${REPLY[@]}")
 	if [[ ${TARGET[*]-} != "$TARGET_OLD" ]]; then
 		event emit "change-group" "$TARGET_NAME" "${TARGET[@]}"
 	fi
 }
 
-doco-target::set() {
-	this declare-group || return; TARGET=(); this add "$@"
-}
 ```
 
 ### The Current Target
 
-The current target maps to the variable `DOCO_SERVICES` -- the array of names that will be passed to docker-compose.  It has the internal name of `@current`, which is an intentionally invalid target name, so it can't collide with any actual groups or services, and so that it can't be turned into a service by adding its own name to it.  It can only ever be nonexistent or a group.  The current target can be added to for the duration of a command/function call using `target` *name* `call` *command...*, or multiple targets can be added using `with-targets` *names* `--` *command...*.
+The `@current` target is a read-only target that maps to the variable `DOCO_SERVICES` (the array of service names that will be passed to docker-compose).  The name `@current`, is an intentionally invalid container name, so it can't collide with any actual groups or services, and it can't be turned into a service by adding its own name to it.  It can only ever be nonexistent or a group.
+
+The current target can be set for the duration of a single command/function call using `with-targets` *names* `--` *command...*; you can include `@current` in the name list to add the other names to the existing target set.
 
 ```shell
-current-target() {
-	local TARGET_NAME="@current" TARGET_VAR=DOCO_SERVICES; local -n TARGET="$TARGET_VAR"
-	local TARGET_OLD=${TARGET[*]-} __mro__=(doco-target); this "$@"
-}
-
-doco-target::call() {
-	if [[ $TARGET_NAME == "@current" ]]; then "$@"
-	else with-targets "$TARGET_NAME" -- "$@"; fi
-}
+@current-target::set() { fail "@current group is read-only"; }
+@current-target::declare-service() { fail "@current is a group, but a service was expected"; }
+@current-target::declare-group() { :; }
 
 with-targets() {
-	REPLY=(); while (($#)) && [[ $1 != -- ]]; do REPLY+=("$1"); shift; done
-	local DOCO_SERVICES=("${DOCO_SERVICES[@]}")
-	current-target add "${REPLY[@]}"; "${@:2}"
+	local s=(); while (($#)) && [[ $1 != -- ]]; do s+=("$1"); shift; done
+	all-targets "${s[@]}" || return
+	# oh bash, why do you hate us so...
+	local DOCO_SERVICES; DOCO_SERVICES=("${REPLY[@]}"); readonly DOCO_SERVICES
+	"${@:2}"
 }
+
+```
+
+### Target Set Operations
+
+The `all-targets` and `any-target` functions return a `REPLY` array consisting of either the contents of all named targets, or the first named target that exists (even if empty).  For `all-targets`, all targets other than `@current` must exist or the result is a failure.  For `any-target`, the operation is a success unless none of the targets exist.
+
+```shell
+# set REPLY to merge of all given target names
+all-targets() {
+	local services=()
+	while (($#)); do
+		target "$1" get || [[ $1 == @current ]] ||
+			fail "'$1' is not a known group or service" || return
+		for REPLY in "${REPLY[@]}"; do
+			[[ " ${services[*]-} " == *" $REPLY "* ]] || services+=("$REPLY")
+		done
+		shift
+	done
+	REPLY=("${services[@]}")
+}
+
+# set REPLY to contents of the first existing target
+any-target() {
+	for REPLY; do
+		if target "$REPLY" get; then return ; fi
+	done
+	REPLY=(); false
+}
+
 ```
 
