@@ -38,21 +38,21 @@
       - [Non-Service Subcommands](#non-service-subcommands)
       - [Single-Service Subcommands](#single-service-subcommands)
     + [Docker-Compose Options](#docker-compose-options)
-      - [Generic Options](#generic-options)
-      - [Aborting Options (--help, --version, etc.)](#aborting-options---help---version-etc)
-      - [Project-level Options](#project-level-options)
+      - [Global Options](#global-options)
+      - [Informational Options (--help, --version, etc.)](#informational-options---help---version-etc)
+      - [Project Options](#project-options)
   * [Command-line Interface](#command-line-interface)
     + [doco options](#doco-options)
-      - [`--` *[subcommand args...]*](#---subcommand-args)
-      - [`--all` *subcommand args...*](#--all-subcommand-args)
-      - [`--where` *jq-filter [subcommand args...]*](#--where-jq-filter-subcommand-args)
-      - [`--with` *service [subcommand args...]*](#--with-service-subcommand-args)
-      - [`--with-default` *target [subcommand args...]*](#--with-default-target-subcommand-args)
-      - [`--require-services` *flag [subcommand args...]*](#--require-services-flag-subcommand-args)
+      - [`--`](#--)
+      - [`--all`](#--all)
+      - [`--where=`*jq-filter*](#--wherejq-filter)
+      - [`--with=`*target*](#--withtarget)
+      - [`--with-default=`*target*](#--with-defaulttarget)
+      - [`--require-services=`*flag [subcommand args...]*](#--require-servicesflag-subcommand-args)
     + [doco subcommands](#doco-subcommands)
       - [`cmd` *flag subcommand...*](#cmd-flag-subcommand)
       - [`cp` *[opts] src dest*](#cp-opts-src-dest)
-      - [`foreach` *subcmd arg...*](#foreach-subcmd-arg)
+      - [`foreach` *subcommand...*](#foreach-subcommand)
       - [`jq`](#jq)
       - [`sh`](#sh)
 
@@ -476,11 +476,12 @@ def services_matching(f): services | to_entries | .[] | select( .value | f ) ;
 
 #### Multi-Service Subcommands
 
-Unrecognized subcommands are first checked to see if they're a service or group.  If not, they're sent to docker-compose, with the current service set appended to the command line.  (The service set is empty by default, causing docker-compose to apply commands to all services by default.)
+Subcommands that accept multiple services get any services in the current service set appended to the command line.  (The service set is empty by default, causing docker-compose to apply commands to all services by default.)
 
 ~~~shell
     $ doco foo2
-    docker-compose foo2
+    'foo2' is not a recognized option, command, service, or group
+    [64]
     $ (GROUP foo2 += bar; doco foo2 ps)
     docker-compose ps bar
     $ (GROUP foo2 += bar; doco foo2 bar)
@@ -494,7 +495,7 @@ But docker-compose subcommands that *don't* take services as their sole position
     $ declare -f doco.config | sed 's/ $//'
     doco.config ()
     {
-        compose config "$@"
+        compose-untargeted config "$@"
     }
     $ doco config
     docker-compose config
@@ -502,7 +503,7 @@ But docker-compose subcommands that *don't* take services as their sole position
 
 #### Single-Service Subcommands
 
-Commands that take exactly *one* service (exec, run, and port) are modified to run on multiple services or no services.  When there are no services in the service set, they take an explicit service positionally, just like with docker-compose.  Otherwise, the positional service argument is assumed to be missing, and the command is run once for each service in the current set.
+Commands that take exactly *one* service (exec, run, and port) are modified to optionally accept a service or group alias specified before the command.  When there are no services in the service set, they take an explicit service positionally, just like with docker-compose.  Otherwise, the positional service argument is assumed to be missing, and the current service set is used as the target.  (Which requires that the service set contain exactly one service: no more, no less.)
 
 Inserting the service argument at the appropriate place requires parsing the command's options, specifically those that take an argument.
 
@@ -512,42 +513,48 @@ Inserting the service argument at the appropriate place requires parsing the com
 
     $ SERVICES x y z
     $ doco x y z run -e FOO=bar foo
-    docker-compose run -e FOO=bar x foo
-    docker-compose run -e FOO=bar y foo
-    docker-compose run -e FOO=bar z foo
+    run cannot be used on multiple services
+    [64]
 
-    $ doco -- exec -- foo bar
-    docker-compose exec foo bar
+    $ doco -- exec bash -c 'blah'    # bash is not a service, so this fails
+    No service/group specified for exec
+    [64]
+
+    $ doco -- exec foo bash          # foo *is* a service, so this succeeds
+    docker-compose exec foo bash
 ~~~
 
 ### Docker-Compose Options
 
   A few (like `--version` and `--help`) need to exit immediately, and a few others need special handling:
 
-#### Generic Options
+#### Global Options
 
-Most docker-compose global options are added to the `DOCO_OPTS` array, where they will pass through to any subcommand.
+Most docker-compose global options are simply accumulated and passed through to docker-compose.
 
 ~~~shell
     $ doco --verbose --tlskey blah ps
-    docker-compose --verbose --tlskey blah ps
+    docker-compose --verbose --tlskey=blah ps
 ~~~
 
-#### Aborting Options (--help, --version, etc.)
+#### Informational Options (--help, --version, etc.)
 
 Some options pass directly the rest of the command line directly to docker-compose, ignoring any preceding options or prefix options:
 
 ~~~shell
     $ doco --help --verbose something blah
     docker-compose --help --verbose something blah
+
+    $ doco -vh foo
+    docker-compose -v -h foo
 ~~~
 
-#### Project-level Options
+#### Project Options
 
-Project level options are fixed and can't be changed via the command line.
+The project name, file(s) and directory are controlled using doco's configuration or by doco itself, so doco explicitly rejects any docker-compose options that affect them:
 
 ~~~shell
-    $ (doco --file x)
+    $ (doco -fx)
     doco does not support -f and --file.
     [64]
 
@@ -555,7 +562,7 @@ Project level options are fixed and can't be changed via the command line.
     You must use COMPOSE_PROJECT_NAME to set the project name.
     [64]
 
-    $ (doco --project-directory x blah)
+    $ (doco --project-directory=x blah)
     doco: --project-directory cannot be overridden
     [64]
 ~~~
@@ -564,9 +571,11 @@ Project level options are fixed and can't be changed via the command line.
 
 ### doco options
 
-#### `--` *[subcommand args...]*
+#### `--`
 
-Reset the active service set to empty.  This can be used to ensure a command is invoked for all (or no) services, even if a service set was previously selected:
+Explicitly set the active service set to empty and disable doco's support for default command targets for the remainder of the command line.
+
+If no services are explicitly added after this point in the command line, then docker-compose subcommands will have their default behavior and argument parsing.  (That is, commands that take multiple services will apply to all services unless a service is listed, and commands that apply to a single service will require it as the first post-option argument.)
 
 ~~~shell
     $ SERVICES a b c
@@ -574,18 +583,18 @@ Reset the active service set to empty.  This can be used to ensure a command is 
     docker-compose ps
 ~~~
 
-#### `--all` *subcommand args...*
+#### `--all`
 
-Update the service set to include *all* services, then invoke `doco` *subcommand args*.... Note that this is different from executing normal docker-compose commands with an empty (`--`) set, in that it explicitly lists all the services.
+Update the service set to include *all* services for the remainder of the command line (unless reset again with `--`). Note that this is different from executing normal docker-compose commands with an explicitly empty set (e.g. using  `--` or an empty group), in that it explicitly passes along all the service names.  (Among other things, this lets you use commands like `foreach`to run single-target commands (e.g. `exec`) against each service.)
 
 ~~~shell
     $ doco --all ps
     docker-compose ps example1
 ~~~
 
-#### `--where` *jq-filter [subcommand args...]*
+#### `--where=`*jq-filter*
 
-Add services matching *jq-filter* to the current service set and invoke `doco` *subcommand args...*.  If the subcommand is omitted, outputs service names to stdout, one per line, returning a failure status of 1 and a message on stderr if no services match the given filter.  The filter is a jq expression that will be applied to the body of a service definition as it appears in the form *provided* to docker-compose.  (That is, values supplied by `extends` or variable interpolation are not available.)
+Add services matching *jq-filter* to the current service set for the remainder of the command line.  If this is the last thing on the command line, outputs service names to stdout, one per line, returning a failure status of 1 and a message on stderr if no services match the given filter.  The filter is a jq expression that will be applied to the body of a service definition as it appears in the form *provided* to docker-compose.  (That is, values supplied by compose via `extends` or variable interpolation are not available.)
 
 ~~~shell
     $ doco --where true
@@ -593,15 +602,15 @@ Add services matching *jq-filter* to the current service set and invoke `doco` *
     $ doco --where false
     No matching services
     [1]
-    $ doco --where false ps
+    $ doco --where=false ps
     docker-compose ps
-    $ doco --where true ps
+    $ doco --where=true ps
     docker-compose ps example1
 ~~~
 
-#### `--with` *service [subcommand args...]*
+#### `--with=`*target*
 
-The `with`  subcommand adds one or more services to the current service set and invokes  `doco` *subcommand args...*.  The *service* argument is either a single service name or a string containing a space-separated list of service names.  `--with` can be given more than once.  (To reset the service set to empty, use `--`.)
+The `--with`  option adds one or more services or groups to the current service set for the remainder of the command line, unless reset with `--`.  The *target* argument is either a single service or group name, or a string containing a space-separated list of service or group names.  `--with` can be given more than once.  To reset the service set to empty, use `--`.
 
 ~~~shell
     $ doco --with "a b" ps
@@ -612,24 +621,24 @@ The `with`  subcommand adds one or more services to the current service set and 
 
 You don't normally need to use this option, because you can simply run `doco` *targets... subcommand...* in the first place.  It's really only useful in cases where you have service or group names that might conflict with other subcommand names, or need to store a set of group/service names in a non-array variable (e.g. in a `.env` file.)
 
-#### `--with-default` *target [subcommand args...]*
+#### `--with-default=`*target*
 
-Invoke `doco` *subcommand args...*, adding *target* to the current service set if the current set is empty.  *target* can be nonexistent or empty, so you may wish to follow this option with `--require-services` to verify the new count.
+Invoke `doco` *subcommand args...*, adding *target* to the current service set if the current set is empty.  Note that  *target* could still be nonexistent or empty, so you may wish to follow this option with `--require-services` to verify the new count.
 
 ~~~shell
     $ doco -- --with-default alfa ps
     docker-compose ps alfa
 
-    $ doco foxtrot --with-default alfa ps -q
+    $ doco foxtrot --with-default=alfa ps -q
     docker-compose ps -q foxtrot
 ~~~
 
-#### `--require-services` *flag [subcommand args...]*
+#### `--require-services=`*flag [subcommand args...]*
 
 This is the command-line equivalent of calling `require-services` *flag subcommand* before invoking *subcommand args...*.  That is, it checks that the relevant number of services are present and exits with a usage error if not.  The *flag* argument can include a space and a command name to be used in place of *subcommand* in any error messages.
 
 ~~~shell
-    $ (doco -- --require-services "1 somecommand" ps)
+    $ (doco -- --require-services="1 somecommand" ps)
     no services specified for somecommand
     [64]
     $ (doco -- --require-services ps)
@@ -701,9 +710,9 @@ Copy a file in or out of a service container.  Functions the same as `docker cp`
     [64]
 ~~~
 
-#### `foreach` *subcmd arg...*
+#### `foreach` *subcommand...*
 
-Execute the given `doco` subcommand once for each service in the current service set, with the service set restricted to a single service for each subcommand.  This can be useful for explicit multiple (or zero) execution of a command that is otherwise restricted in how many times it can be executed.
+Execute the given `doco` subcommand once for each service in the current service set, with the service set restricted to a single service for each subcommand invocation.  This can be useful for explicit multiple (or zero) execution of a command that is otherwise restricted in how many times it can be executed.
 
 ~~~shell
     $ doco x y foreach ps
@@ -715,7 +724,9 @@ Execute the given `doco` subcommand once for each service in the current service
 
 #### `jq`
 
-`doco jq` *args...* pipes the docker-compose configuration to `jq` *args...* as JSON.  Any functions defined via jqmd's facilities  (`DEFINES`, `IMPORTS`, `jq defs` blocks, `const` blocks, etc.) will be available to the given jq expression, if any.  If no expression is given, `.` is used.
+`doco jq` *args...* pipes the docker-compose configuration to `jq` *args...* as JSON.   The filter is a jq expression that will be applied to the configuration as it appears in the form *provided* to docker-compose.  (That is, values supplied by compose via `extends` or variable interpolation will not be visible.)
+
+Any functions defined via jqmd's facilities  (`DEFINES`, `IMPORTS`, `jq defs` blocks, `const` blocks, etc.) will be available to the given jq expression, if any.  If no expression is given, `.` is used.
 
 ~~~shell
     $ doco jq .version
@@ -724,7 +735,7 @@ Execute the given `doco` subcommand once for each service in the current service
 
 #### `sh`
 
-`doco sh` *args...* executes `bash` *args* in the specified service's container.  If no service is specified, it defaults to the `cmd-default` target.  Multiple services are not allowed.
+`doco sh` *args...* executes `bash` *args* in the specified service's container.  If no service is specified, it defaults to the `cmd-default` target.  Multiple services are not allowed, unless you preface `sh` with `foreach`.
 
 ~~~shell
     $ (doco sh)
