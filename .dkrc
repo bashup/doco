@@ -21,7 +21,7 @@ done
 # SC2178 = array/string mixing
 SHELLCHECK_OPTS='-e SC1090,SC1091,SC2016,SC2128,SC2145,SC2178'
 
-watch+ "*.md" "docs/*.md" "!**/*.md.err" "!**/.~*.md" -- dk test
+watch+ "*.md" "docs/*.md" "specs/cram-setup.sh" "specs/*.md" "!**/*.md.err" "!**/.~*.md" -- dk test
 
 before test mdsh --out "$BASHER_INSTALL_BIN/doco" --compile doco.md   # for sourcing and running by tests
 before test chmod +x "$BASHER_INSTALL_BIN/doco"

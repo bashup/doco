@@ -60,7 +60,7 @@ Your project document can include as many `shell`, `yaml`, and `jq` blocks as yo
 
 Of course, you won't want to put sensitive data directly in your project document.  So, just like with docker-compose, you can use an `.env` file.
 
-You're also not limited to just the contents of your main project document to do configuration.  The shell code embedded in your project document can use [export-env](docs/Reference.md#export-env-filename) to process additional docker-compose format `.env` files, or [include](docs/Reference.md#include-markdownfile-cachefile) to source other markdown documents with the same syntax.  This can be useful for projects that want to be extensible, where a user can define local extension documents alongside a main project document that's kept in revision control.
+You're also not limited to just the contents of your main project document to do configuration.  The shell code embedded in your project document can use [`export-env`](Config.md#export-env-filename) to process additional docker-compose format `.env` files, or [`include`](Config.md#include-markdownfile-cachefile) to source other markdown documents with the same syntax.  This can be useful for projects that want to be extensible, where a user can define local extension documents alongside a main project document that's kept in revision control.
 
 ### Caching
 

@@ -3,8 +3,6 @@
 Targets are the names of services, or groups of services.  They follow the rules of docker-compose container names:
 
 ~~~shell
-    $ source doco; set +e
-
     $ is-target-name "foo.bar_BAZ-54" && echo yep
     yep
 
