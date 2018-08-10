@@ -1,5 +1,11 @@
 ## Docker-Compose Integration
 
+~~~shell
+# Pre-define service names used in examples:
+
+    $ SERVICES x y z foo bar
+~~~
+
 ### `compose`
 
 `compose` *args* is short for `docker-compose` *args*, except that the project directory and config files are set to the ones calculated by doco.  The contents of the `DOCO_OPTS` array are included before the supplied arguments:
@@ -46,8 +52,6 @@ Commands that take exactly *one* service (exec, run, and port) are modified to o
 Inserting the service argument at the appropriate place requires parsing the command's options, specifically those that take an argument.
 
 ```shell
-    $ SERVICES x y z foo
-
     $ doco x port --protocol udp 53
     docker-compose port --protocol udp x 53
 

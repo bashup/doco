@@ -418,6 +418,7 @@ done
 for lv in ${!LOCO_@}; do unset "$lv"; done
 
 LOCO_SCRIPT=$0
+project-is-finalized() { [[ ${DOCO_CONFIG-} ]]; }
 loco_preconfig() {
     set -- "${BASH_VERSINFO[@]}"
     (( $1 > 4 || $1 == 4 && $2 >= 4 )) || mdsh-error "Sorry; doco requires bash 4.4 or better"
@@ -445,7 +446,7 @@ loco_loadproject() {
 
     event fire "finalize_project"  # allow overriding the final compose project def
     RUN_JQ -c -n >"$json"; DOCO_CONFIG=$json; services-matching || return
-    GROUP --all := "${REPLY[@]}"   # ensure SERVICES exist for all services
+    DOCO_CONFIG='' GROUP --all := "${REPLY[@]}"   # ensure SERVICES exist for all services
     target --all readonly          # make --all a read-only group
     event fire "before_commands"   # hook to set up aliases, custom commands, etc.
 }
@@ -471,7 +472,7 @@ check_multi() {
 GROUP() {
     (($#>1)) || loco_error "GROUP requires at least two arguments"
     local op groups=(); while (($#)) && [[ $1 != [+:]= ]]; do groups+=("$1"); shift; done
-    for svc in "${@:2}"; do target "$svc" exists || target "$svc" declare-service; done
+    for svc in "${@:2}"; do target "$svc" exists || target "$svc" declare-service || return; done
     case "${1-}" in
         +=) op='add' ;;
         :=) op='set' ;;
@@ -572,6 +573,10 @@ doco-target::exists() { [[ ${TARGET+_} ]] || declare -p "$TARGET_VAR" >/dev/null
 
 doco-target::declare-service() {
 	if ! this exists; then
+		if project-is-finalized; then
+			fail "$TARGET_NAME: services must be created before project spec is finalized" ||
+			return
+		fi
 		TARGET=("$TARGET_NAME"); event emit "create-service" "$TARGET_NAME" "$TARGET_NAME"
 		this readonly "$@"
 	elif ! this is-service; then
@@ -796,6 +801,8 @@ compose-singular() {
 }
 
 loco_do() {
+	project-is-finalized ||
+		fail "doco CLI cannot be used before the project spec is finalized" || return
 	case ${1-} in
 		--*=*)    doco-optarg  "$@" ;;  # --[option]=value
 		--*)      doco-option  "$@" ;;  # --[option]

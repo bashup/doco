@@ -5,7 +5,7 @@
     $ cp $TESTDIR/../README.md readme.doco.md
 
 # Ignore/null out all configuration for testing
-    $ loco_main no-op
+    $ doco --
 ~~~
 
 ### File and Function Names
@@ -109,6 +109,13 @@ Either way, service targets are created for any services that don't already have
     declare -ar __doco_target__2d_2dall=([0]="t")
     t
     baz'bar
+
+# doco command(s) can't be run from config:
+
+    $ echo 'doco --all' >.doco
+    $ command doco
+    doco CLI cannot be used before the project spec is finalized
+    [64]
 
 # Back to the test root
     $ cd ..

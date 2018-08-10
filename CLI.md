@@ -29,6 +29,8 @@ doco parses options and commands with support for GNU-like short and long option
 
 ```shell
 loco_do() {
+	project-is-finalized ||
+		fail "doco CLI cannot be used before the project spec is finalized" || return
 	case ${1-} in
 		--*=*)    doco-optarg  "$@" ;;  # --[option]=value
 		--*)      doco-option  "$@" ;;  # --[option]

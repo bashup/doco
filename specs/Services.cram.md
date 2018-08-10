@@ -1,9 +1,15 @@
 ## Service Selection API
 
-~~~sh
+~~~shell
+# Pre-define service names used in examples:
+
+    $ SERVICES a b x y foo bar
+
+# Set up services based on README.md
+
     $ cp "$TESTDIR"/../README.md readme.doco.md
     $ rm docker-compose.yml
-    $ doco no-op  # initialize doco
+    $ doco --  # initialize doco
 ~~~
 
 ### Automation

@@ -1,5 +1,13 @@
 ## Project Definition API
 
+~~~shell
+# Pre-define service names used in examples:
+
+    $ SERVICES niner foxtrot bar baz alfa
+~~~
+
+
+
 ### Declarations
 
 #### `GROUP` *name(s) operator target(s)...*
@@ -51,13 +59,24 @@ Add *targets* to the named group(s), defining or redefining jq functions to map 
     bar
 ```
 
+Note: services can't be declared once the docker-compose project definition has been finalized, so any targets passed to `GROUP` after the project definition is finalized must be *existing* services or groups.  Otherwise an error will occur:
+
+~~~shell
+    $ GROUP fiz := something-new
+    something-new: services must be created before project spec is finalized
+    [64]
+
+    $ GROUP something-new :=
+    $ GROUP fiz := something-new   # now it succeeds, since 'something-new' exists
+~~~
+
 #### `SERVICES` *name...*
 
 Declare the named targets to be services and define jq functions for them.  `SERVICES foo bar` will create jq functions `foo()` and `bar()` that can be used to alter `.services.foo` and `.services.bar`, respectively.  The given names must be valid container names and must not already be defined as groups.
 
-```shell
-    $ SERVICES alfa foxtrot
+Note: services can't be declared once the docker-compose project definition has been finalized.
 
+```shell
 # services or groups as subcommands update the active service set
     $ doco alfa ps
     docker-compose ps alfa
@@ -65,6 +84,11 @@ Declare the named targets to be services and define jq functions for them.  `SER
 # jq function makes modifications to the service entry
     $ event fire "finalize_project"; RUN_JQ -c -n '{} | foxtrot(.image = "test")'
     {"services":{"foxtrot":{"image":"test"}}}
+
+# Can't declare new service after init:
+    $ SERVICES new-service
+    new-service: services must be created before project spec is finalized
+    [64]
 ```
 
 #### `VERSION` *docker-compose version*

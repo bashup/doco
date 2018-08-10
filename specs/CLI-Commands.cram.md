@@ -1,5 +1,11 @@
 ## Built-in Commands
 
+~~~shell
+# Pre-define service names used in examples:
+
+    $ SERVICES bravo a b x y alfa foxtrot
+~~~
+
 #### The Null Command
 
 If no arguments are given, `doco` outputs the current target service list, one item per line, and returns success.  If there is no current target, however, a usage message is output:
@@ -51,10 +57,10 @@ Copy a file in or out of a service container.  Functions the same as `docker cp`
     no services specified for cp
     [64]
 
-    $ (GROUP shell-default += bravo; doco cp :x y)
+    $ (GROUP shell-default := bravo; doco cp :x y)
     docker cp clicommandscrammd_bravo_1:x /*/CLI-Commands.cram.md/y (glob)
 
-    $ (GROUP shell-default += bravo; LOCO_PWD=$PWD/t doco bravo cp y :x)
+    $ (GROUP shell-default := bravo; LOCO_PWD=$PWD/t doco bravo cp y :x)
     docker cp /*/CLI-Commands.cram.md/t/y clicommandscrammd_bravo_1:x (glob)
 
 # Bad usages
@@ -85,7 +91,6 @@ Copy a file in or out of a service container.  Functions the same as `docker cp`
 Execute the given `doco` subcommand once for each service in the current service set, with the service set restricted to a single service for each subcommand invocation.  This can be useful for explicit multiple (or zero) execution of a command that is otherwise restricted in how many times it can be executed.
 
 ~~~shell
-    $ SERVICES x y
     $ doco x y foreach ps
     docker-compose ps x
     docker-compose ps y

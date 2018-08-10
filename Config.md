@@ -2,6 +2,7 @@
 
 <!-- toc -->
 
+- [Configuration vs. Runtime](#configuration-vs-runtime)
 - [File and Function Names](#file-and-function-names)
 - [Project-Level Configuration](#project-level-configuration)
 - [Declarations](#declarations)
@@ -14,6 +15,14 @@
   * [`include` *markdownfile [cachefile]*](#include-markdownfile-cachefile)
 
 <!-- tocstop -->
+
+### Configuration vs. Runtime
+
+Some APIs are only available after configuration is complete, or only during configuration.  We expose a `project-is-finalized` function to indicate whether the docker-compose project definition has been generated yet.
+
+```shell
+project-is-finalized() { [[ ${DOCO_CONFIG-} ]]; }
+```
 
 ### File and Function Names
 
@@ -58,7 +67,7 @@ loco_loadproject() {
 
     event fire "finalize_project"  # allow overriding the final compose project def
     RUN_JQ -c -n >"$json"; DOCO_CONFIG=$json; services-matching || return
-    GROUP --all := "${REPLY[@]}"   # ensure SERVICES exist for all services
+    DOCO_CONFIG='' GROUP --all := "${REPLY[@]}"   # ensure SERVICES exist for all services
     target --all readonly          # make --all a read-only group
     event fire "before_commands"   # hook to set up aliases, custom commands, etc.
 }
@@ -95,7 +104,7 @@ Add *targets* to the named group(s), defining or redefining jq functions to map 
 GROUP() {
     (($#>1)) || loco_error "GROUP requires at least two arguments"
     local op groups=(); while (($#)) && [[ $1 != [+:]= ]]; do groups+=("$1"); shift; done
-    for svc in "${@:2}"; do target "$svc" exists || target "$svc" declare-service; done
+    for svc in "${@:2}"; do target "$svc" exists || target "$svc" declare-service || return; done
     case "${1-}" in
         +=) op='add' ;;
         :=) op='set' ;;
@@ -106,9 +115,13 @@ GROUP() {
 }
 ```
 
+Note: services can't be declared once the docker-compose project definition has been finalized, so any targets passed to `GROUP` after the project definition is finalized must be *existing* services or groups.  Otherwise an error will occur.
+
 #### `SERVICES` *name...*
 
 Declare the named targets to be services and define jq functions for them.  `SERVICES foo bar` will create jq functions `foo()` and `bar()` that can be used to alter `.services.foo` and `.services.bar`, respectively.  The given names must be valid container names and must not already be defined as groups.
+
+Note: services can't be declared once the docker-compose project definition has been finalized.
 
 ```shell
 SERVICES() { for REPLY; do target "$REPLY" declare-service; done; }

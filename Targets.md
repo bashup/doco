@@ -40,6 +40,10 @@ doco-target::exists() { [[ ${TARGET+_} ]] || declare -p "$TARGET_VAR" >/dev/null
 
 doco-target::declare-service() {
 	if ! this exists; then
+		if project-is-finalized; then
+			fail "$TARGET_NAME: services must be created before project spec is finalized" ||
+			return
+		fi
 		TARGET=("$TARGET_NAME"); event emit "create-service" "$TARGET_NAME" "$TARGET_NAME"
 		this readonly "$@"
 	elif ! this is-service; then

@@ -8,10 +8,7 @@ loco_site_config() { :;}
 # stub docker and docker-compose to output arguments
 doco.--dry-run
 
-# define a no-op command
-doco.no-op() { :;}
-
-# and a default empty compose file
+# default empty compose file
 echo '{"version": "2.1", "services": {"example1":{}}}' >docker-compose.yml
 
 # Initialize doco in-process when run without other initialization
