@@ -8,17 +8,6 @@
 
 ### Automation
 
-#### `find-services` *[jq-filter]*
-
-Search the docker compose configuration for `services_matching(`*jq-filter*`)`, returning their names as an array in `REPLY`.  If *jq-filter* isn't supplied, `true` is used.  (i.e., find all services.)
-
-```shell
-    $ find-services && declare -p REPLY | sed "s/'//g"
-    declare -a REPLY=([0]="example1")
-    $ find-services false && declare -p REPLY | sed "s/'//g"
-    declare -a REPLY=()
-```
-
 #### `foreach-service` *cmd args...*
 
 Invoke *cmd args...* once for each service in the current service set; the service set will contain exactly one service during each invocation.
@@ -98,15 +87,28 @@ Checks the number of currently selected services, based on *flag*.  If flag is `
     success
 ```
 
+#### `services-matching` *[jq-filter]*
+
+Search the docker compose configuration for `services_matching(`*jq-filter*`)`, returning their names as an array in `REPLY`.  If *jq-filter* isn't supplied, `true` is used.  (i.e., find all currently-defined services.)
+
+```shell
+    $ services-matching && declare -p REPLY | sed "s/'//g"
+    declare -a REPLY=([0]="example1")
+
+    $ services-matching false && declare -p REPLY | sed "s/'//g"
+    declare -a REPLY=()
+
+    $ DOCO_CONFIG= services-matching true && declare -p REPLY
+    declare -a REPLY=()
+```
+
+Note that if this function is called while the compose project file is being generated, it returns only the services that match as of the moment it was invoked.  Any YAML, JSON, jq, or shell manipulation that follows its invocation could render the results out-of-date.  (If you're trying to dynamically alter the configuration, you should probably use a jq function or filter instead, perhaps using the jq [`services_matching`](#services_matchingfilter) function.)
+
 ### jq API
 
 #### `services`
 
 Assuming that `.` is a docker-compose configuration, return the (possibly-empty) dictionary of services from it.  If the configuration is empty or a compose v1 file (i.e. it lacks both `.services` and `.version`), `.` is returned.
-
-```jq api
-def services: if .services // .version then .services else . end;
-```
 
 ```shell
     $ RUN_JQ -n -c '{x: 27} | services'                 # root if no services
@@ -120,10 +122,6 @@ def services: if .services // .version then .services else . end;
 #### `services_matching(filter)`
 
 Assuming `.` is a docker-compose configuration, return a stream of `{key:, value:}` pairs containing the names and service dictionaries of services for which `(.value | filter)` returns truth.
-
-```jq api
-def services_matching(f): services | to_entries | .[] | select( .value | f ) ;
-```
 
 ```shell
     $ RUN_JQ -r 'services_matching(true) | .key' "$DOCO_CONFIG"

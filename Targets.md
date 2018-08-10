@@ -68,7 +68,7 @@ doco-target::add() { this set "$TARGET_NAME" "$@"; }
 doco-target::set() {
 	this declare-group || return
 	all-targets "$@" || return
-    TARGET=("${REPLY[@]}")
+	TARGET=("${REPLY[@]}")
 	if [[ ${TARGET[*]-} != "$TARGET_OLD" ]]; then
 		event emit "change-group" "$TARGET_NAME" "${TARGET[@]}"
 	fi
@@ -78,7 +78,7 @@ doco-target::set() {
 
 ### The Current Target
 
-The `@current` target is a read-only target that maps to the variable `DOCO_SERVICES` (the array of service names that will be passed to docker-compose).  The name `@current`, is an intentionally invalid container name, so it can't collide with any actual groups or services, and it can't be turned into a service by adding its own name to it.  It can only ever be nonexistent or a group.
+The `@current` target is a read-only target that maps to the variable `DOCO_SERVICES` (the array of service names that will be passed to docker-compose).  The name `@current` is an intentionally invalid container name, so it can't collide with any actual groups or services, and it can't be turned into a service by adding its own name to it.  It can only ever be nonexistent or a group.
 
 The current target can be set for the duration of a single command/function call using `with-targets` *names* `--` *command...*; you can include `@current` in the name list to add the other names to the existing target set.
 

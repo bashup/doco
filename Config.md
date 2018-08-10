@@ -58,7 +58,7 @@ loco_loadproject() {
     esac
 
     eval "$DOCO_PROFILE"  # allow overriding the final configuration
-    RUN_JQ -c -n >"$json"; DOCO_CONFIG=$json; find-services
+    RUN_JQ -c -n >"$json"; DOCO_CONFIG=$json; services-matching || return
     ${REPLY[@]+SERVICES "${REPLY[@]}"}   # ensure SERVICES exist for all services
 }
 

@@ -9,14 +9,6 @@ The services API depends on the [Targets API](Targets.md) and [bashup/events](ht
 
 ### Automation
 
-#### `find-services` *[jq-filter]*
-
-Search the docker compose configuration for `services_matching(`*jq-filter*`)`, returning their names as an array in `REPLY`.  If *jq-filter* isn't supplied, `true` is used.  (i.e., find all services.)
-
-```shell
-find-services() { REPLY=$(RUN_JQ -r "services_matching(${1-true}) | .key" "$DOCO_CONFIG") && IFS=$'\n' mdsh-splitwords "$REPLY"; }
-```
-
 #### `foreach-service` *cmd args...*
 
 Invoke *cmd args...* once for each service in the current service set; the service set will contain exactly one service during each invocation.  Does nothing if the current service set is empty.
@@ -67,6 +59,24 @@ require-services() {
 }
 ```
 
+#### `services-matching` *[jq-filter]*
+
+Search the docker compose configuration for `services_matching(`*jq-filter*`)`, returning their names as an array in `REPLY`.  If *jq-filter* isn't supplied, `true` is used.  (i.e., find all currently-defined services.)
+
+```shell
+services-matching() {
+	REPLY=()
+	local t="services_matching(${1-true}) | .key"
+	t="$(
+		[[ ${DOCO_CONFIG:+_} ]] || JQ_OPTS -n;
+		RUN_JQ -r "$t" ${DOCO_CONFIG:+"$DOCO_CONFIG"}
+	)" &&
+	IFS=$'\n' mdsh-splitwords "$t"
+}
+```
+
+Note that if this function is called while the compose project file is being generated, it returns only the services that match as of the moment it was invoked.  Any YAML, JSON, jq, or shell manipulation that follows its invocation could render the results out-of-date.  (If you're trying to dynamically alter the configuration, you should probably use a jq function or filter instead, perhaps using the jq [`services_matching`](#services_matchingfilter) function.)
+
 ### jq API
 
 #### `services`
@@ -82,7 +92,7 @@ def services: if .services // .version then .services else . end;
 Assuming `.` is a docker-compose configuration, return a stream of `{key:, value:}` pairs containing the names and service dictionaries of services for which `(.value | filter)` returns truth.
 
 ```jq api
-def services_matching(f): services | to_entries | .[] | select( .value | f ) ;
+def services_matching(f): services // {} | to_entries | .[] | select( .value | f ) ;
 ```
 
 #### Generated Service Functions
@@ -114,5 +124,6 @@ get-alias() { target "$1" get || true; }
 set-alias() { target "$1" set "$@"; }
 with-alias() { target "$1" call "${@:2}"; }
 with-service() { mdsh-splitwords "$1"; with-targets @current "${REPLY[@]}" -- "${@:2}"; }
+find-services() { services-matching "$@"; }
 ```
 

@@ -445,7 +445,7 @@ loco_loadproject() {
     esac
 
     eval "$DOCO_PROFILE"  # allow overriding the final configuration
-    RUN_JQ -c -n >"$json"; DOCO_CONFIG=$json; find-services
+    RUN_JQ -c -n >"$json"; DOCO_CONFIG=$json; services-matching || return
     ${REPLY[@]+SERVICES "${REPLY[@]}"}   # ensure SERVICES exist for all services
 }
 
@@ -594,7 +594,7 @@ doco-target::add() { this set "$TARGET_NAME" "$@"; }
 doco-target::set() {
 	this declare-group || return
 	all-targets "$@" || return
-    TARGET=("${REPLY[@]}")
+	TARGET=("${REPLY[@]}")
 	if [[ ${TARGET[*]-} != "$TARGET_OLD" ]]; then
 		event emit "change-group" "$TARGET_NAME" "${TARGET[@]}"
 	fi
@@ -634,7 +634,6 @@ any-target() {
 	REPLY=(); false
 }
 
-find-services() { REPLY=$(RUN_JQ -r "services_matching(${1-true}) | .key" "$DOCO_CONFIG") && IFS=$'\n' mdsh-splitwords "$REPLY"; }
 foreach-service() {
     for REPLY in ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}; do
         with-targets "$REPLY" -- "$@"
@@ -655,8 +654,17 @@ require-services() {
     [-1]*) fail "$2 cannot be used on multiple services" ;;
     esac
 }
+services-matching() {
+	REPLY=()
+	local t="services_matching(${1-true}) | .key"
+	t="$(
+		[[ ${DOCO_CONFIG:+_} ]] || JQ_OPTS -n;
+		RUN_JQ -r "$t" ${DOCO_CONFIG:+"$DOCO_CONFIG"}
+	)" &&
+	IFS=$'\n' mdsh-splitwords "$t"
+}
 mdsh_raw_jq_api+=($'def services: if .services // .version then .services else . end;\n')
-mdsh_raw_jq_api+=($'def services_matching(f): services | to_entries | .[] | select( .value | f ) ;\n')
+mdsh_raw_jq_api+=($'def services_matching(f): services // {} | to_entries | .[] | select( .value | f ) ;\n')
 event on "change-group"   @_ generate-jq-func
 event on "create-service" @_ generate-jq-func
 
@@ -674,6 +682,7 @@ get-alias() { target "$1" get || true; }
 set-alias() { target "$1" set "$@"; }
 with-alias() { target "$1" call "${@:2}"; }
 with-service() { mdsh-splitwords "$1"; with-targets @current "${REPLY[@]}" -- "${@:2}"; }
+find-services() { services-matching "$@"; }
 # doco opt OPTION CMD...  --> run CMD with OPTION added to project options
 doco-opt() { local DOCO_OPTS=("${DOCO_OPTS[@]}" "$1"); "${@:2}"; }
 
@@ -829,8 +838,13 @@ doco-other() {
 # Execute the rest of the command line with NO specified service(s)
 doco.--()   { with-targets -- doco "$@"; }
 doco.--all() { doco --where true "$@"; }
+doco.--dry-run() {
+	docker() { printf -v REPLY ' %q' "docker" "$@"; echo "${REPLY# }"; } >&2
+	docker-compose() { printf -v REPLY ' %q' "docker-compose" "$@"; echo "${REPLY# }"; } >&2
+	((! $#)) || { doco "$@"; unset -f docker docker-compose; }
+}
 function doco.--where=() {
-    find-services "${@:1}"
+    services-matching "${@:1}"
     if (($#>1)); then
         with-targets @current "${REPLY[@]}" -- doco "${@:2}"   # run command on matching services
     elif ! ((${#REPLY[@]})); then

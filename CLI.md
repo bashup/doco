@@ -126,7 +126,7 @@ Add services matching *jq-filter* to the current service set for the remainder o
 
 ```shell
 function doco.--where=() {
-    find-services "${@:1}"
+    services-matching "${@:1}"
     if (($#>1)); then
         with-targets @current "${REPLY[@]}" -- doco "${@:2}"   # run command on matching services
     elif ! ((${#REPLY[@]})); then

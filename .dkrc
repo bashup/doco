@@ -31,4 +31,4 @@ on test dk shellcheck "$BASHER_INSTALL_BIN/doco"
 on build mdsh --out bin/doco --compile doco.md
 on build chmod +x bin/doco
 
-cram.files() { ls README.md docs/*.md; }
+on cram_files ls README.md
