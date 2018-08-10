@@ -59,6 +59,7 @@ loco_loadproject() {
     event fire "finalize_project"  # allow overriding the final compose project def
     RUN_JQ -c -n >"$json"; DOCO_CONFIG=$json; services-matching || return
     GROUP --all := "${REPLY[@]}"   # ensure SERVICES exist for all services
+    target --all readonly          # make --all a read-only group
     event fire "before_commands"   # hook to set up aliases, custom commands, etc.
 }
 

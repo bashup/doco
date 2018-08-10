@@ -148,6 +148,20 @@ Groups can be `set` to a list of targets (i.e., existing services or groups), dr
     $ target "nosuch" set aService svc2   # no change = no event
 ~~~
 
+#### Read-only Targets
+
+Groups can be made read-only; services are always read-only.  Any attempt to change a read-only group (even to its existing value) immediately terminates the current bash process.
+
+~~~shell
+    $ target "nosuch" readonly
+    $ (target "nosuch" set aService svc2)
+    *: TARGET: readonly variable (glob)
+    [1]
+
+    $ declare -p __doco_target_aService   # services are read-only variables
+    declare -ar __doco_target_aService=([0]="aService")
+~~~
+
 ### The Current Target
 
 A special target `@current` is used to access a special read-only group whose contents are stored in the `DOCO_SERVICES` variable.  It is used to designate what service names will be passed to docker-compose for a given command.

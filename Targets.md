@@ -41,7 +41,7 @@ doco-target::exists() { [[ ${TARGET+_} ]] || declare -p "$TARGET_VAR" >/dev/null
 doco-target::declare-service() {
 	if ! this exists; then
 		TARGET=("$TARGET_NAME"); event emit "create-service" "$TARGET_NAME" "$TARGET_NAME"
-		this "$@"
+		this readonly "$@"
 	elif ! this is-service; then
 		fail "$TARGET_NAME is a group, but a service was expected"
 	fi
@@ -63,6 +63,8 @@ doco-target::declare-group() {
 ```shell
 doco-target::get() { REPLY=("${TARGET[@]}"); this "${1-exists}" "${@:2}"; }
 doco-target::has-count() { REPLY=("${TARGET[@]}"); eval "(( ${#REPLY[@]} ${1-} ))"; }
+
+doco-target::readonly() { readonly "${TARGET_VAR}"; this "$@"; }
 
 doco-target::add() { this set "$TARGET_NAME" "$@"; }
 doco-target::set() {

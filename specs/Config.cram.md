@@ -93,20 +93,20 @@ Either way, service targets are created for any services that don't already have
     /*/Config.cram.md/t/docker-compose.override.yaml" (glob)
 
 # .env file is auto-loaded, using docker-compose .env syntax, and
-# the "finalize_project" and "before_commands" events are run:
+# the "finalize_project" and "before_commands" events are run, with
+# a readonly '--all' group defined:
 
     $ echo "FOO=baz'bar" >.env
 
     $ cat <<'EOF' >.doco
     > doco.dump() { echo "${DOCO_SERVICES[@]}"; echo "$FOO"; }
     > event on "finalize_project" echo "hi!"
-    > event on "before_commands" target --all get
-    > event on "before_commands" declare -p REPLY
+    > event on "before_commands" declare -p __doco_target__2d_2dall
     > EOF
 
     $ command doco t dump
     hi!
-    declare -a REPLY=([0]="t")
+    declare -ar __doco_target__2d_2dall=([0]="t")
     t
     baz'bar
 
