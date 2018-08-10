@@ -3,11 +3,13 @@
 <!-- toc -->
 
 - [Option Parsing and Command Dispatch](#option-parsing-and-command-dispatch)
+  * [The Null Command](#the-null-command)
   * [Options and Arguments](#options-and-arguments)
   * [Subcommands and Targets](#subcommands-and-targets)
 - [doco options](#doco-options)
   * [`--`](#--)
   * [`--all`](#--all)
+  * [`--dry-run`](#--dry-run)
   * [`--where=`*jq-filter*](#--wherejq-filter)
   * [`--with=`*target*](#--withtarget)
   * [`--with-default=`*target*](#--with-defaulttarget)
@@ -27,15 +29,30 @@ doco parses options and commands with support for GNU-like short and long option
 
 ```shell
 loco_do() {
-	[[ "${1-}" ]] || loco_usage   # No non-empty command given, exit w/usage
-	case $1 in
+	case ${1-} in
 		--*=*)    doco-optarg  "$@" ;;  # --[option]=value
 		--*)      doco-option  "$@" ;;  # --[option]
 		-[^=]=*)  doco-optarg  "$@" ;;  # -a=bcd
 		-[^=]?*)  doco-options "$@" ;;  # -abcd
 		-?)       doco-option  "$@" ;;  # -x
+		'')       doco-null-command ;;  # empty or missing command
 		*)        doco-other   "$@" ;;  # commands, services, and groups
 	esac
+}
+```
+
+#### The Null Command
+
+If no arguments are given, `doco` outputs the current target service list, one item per line, and returns success.  If there is no current target, however, a usage message is output:
+
+```shell
+doco-null-command() {
+	if target "@current" exists; then
+		target "@current" get
+		${REPLY[@]+printf '%s\n' "${REPLY[@]}"}  # only output lines if there are some
+	else
+		loco_usage   # No non-empty command given and no targets specified, exit w/usage
+	fi
 }
 ```
 
@@ -81,7 +98,7 @@ If a name passed to doco on the command line isn't recognized as an option, it's
 doco-other() {
 	if fn-exists "doco.$1"; then "doco.$@"
 	elif is-target-name "$1" && target "$1" exists; then
-		with-targets @current "$1" -- ${2+doco "${@:2}"}
+		with-targets @current "$1" -- doco "${@:2}"
 	else fail "'$1' is not a recognized option, command, service, or group"
 	fi
 }
@@ -104,9 +121,7 @@ doco.--()   { with-targets -- doco "$@"; }
 
 Update the service set to include *all* services for the remainder of the command line (unless reset again with `--`). Note that this is different from executing normal docker-compose commands with an explicitly empty set (e.g. using  `--` or an empty group), in that it explicitly passes along all the service names.  (Among other things, this lets you use commands like `foreach`to run single-target commands (e.g. `exec`) against each service.)
 
-```shell
-doco.--all() { doco --where true "$@"; }
-```
+(Note: this option is actually implemented as a built-in `GROUP`, defined immediately after the project configuration is generated.)
 
 #### `--dry-run`
 
@@ -122,18 +137,12 @@ doco.--dry-run() {
 
 #### `--where=`*jq-filter*
 
-Add services matching *jq-filter* to the current service set for the remainder of the command line.  If this is the last thing on the command line, outputs service names to stdout, one per line, returning a failure status of 1 and a message on stderr if no services match the given filter.  The filter is a jq expression that will be applied to the body of a service definition as it appears in the form *provided* to docker-compose.  (That is, values supplied by compose via `extends` or variable interpolation are not available.)
+Add services matching *jq-filter* to the current service set for the remainder of the command line.  If this is the last thing on the command line, outputs service names to stdout, one per line.  The filter is a jq expression that will be applied to the body of a service definition as it appears in the form *provided* to docker-compose.  (That is, values supplied by compose via `extends` or variable interpolation are not available.)
 
 ```shell
 function doco.--where=() {
     services-matching "${@:1}"
-    if (($#>1)); then
-        with-targets @current "${REPLY[@]}" -- doco "${@:2}"   # run command on matching services
-    elif ! ((${#REPLY[@]})); then
-        echo "No matching services" >&2; return 1
-    else
-        printf '%s\n' "${REPLY[@]}"   # list matching services
-    fi
+    with-targets @current "${REPLY[@]}" -- doco "${@:2}"   # run command on matching services
 }
 ```
 

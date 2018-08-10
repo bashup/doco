@@ -21,16 +21,16 @@ Update the service set to include *all* services for the remainder of the comman
     docker-compose ps example1
 ~~~
 
+(Note: this option is actually implemented as a built-in `GROUP`, defined immediately after the project configuration is generated.)
+
 #### `--where=`*jq-filter*
 
-Add services matching *jq-filter* to the current service set for the remainder of the command line.  If this is the last thing on the command line, outputs service names to stdout, one per line, returning a failure status of 1 and a message on stderr if no services match the given filter.  The filter is a jq expression that will be applied to the body of a service definition as it appears in the form *provided* to docker-compose.  (That is, values supplied by compose via `extends` or variable interpolation are not available.)
+Add services matching *jq-filter* to the current service set for the remainder of the command line.  If this is the last thing on the command line, outputs service names to stdout, one per line.  The filter is a jq expression that will be applied to the body of a service definition as it appears in the form *provided* to docker-compose.  (That is, values supplied by compose via `extends` or variable interpolation are not available.)
 
 ~~~shell
     $ doco --where true
     example1
     $ doco --where false
-    No matching services
-    [1]
     $ doco --where=false ps
     docker-compose ps
     $ doco --where=true ps

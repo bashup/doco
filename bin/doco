@@ -426,7 +426,6 @@ loco_preconfig() {
     LOCO_NAME=doco
     LOCO_USER_CONFIG=$HOME/.config/doco
     LOCO_SITE_CONFIG=/etc/doco/config
-    DOCO_PROFILE=
 }
 loco_loadproject() {
     cd "$LOCO_ROOT"; [[ ! -f .env ]] || export-env .env
@@ -444,9 +443,10 @@ loco_loadproject() {
         ;;
     esac
 
-    eval "$DOCO_PROFILE"  # allow overriding the final configuration
+    event fire "finalize_project"  # allow overriding the final compose project def
     RUN_JQ -c -n >"$json"; DOCO_CONFIG=$json; services-matching || return
-    ${REPLY[@]+SERVICES "${REPLY[@]}"}   # ensure SERVICES exist for all services
+    GROUP --all := "${REPLY[@]}"   # ensure SERVICES exist for all services
+    event fire "before_commands"   # hook to set up aliases, custom commands, etc.
 }
 
 # Run a command with variants accepted by docker-compose, first checking that
@@ -665,14 +665,16 @@ services-matching() {
 }
 mdsh_raw_jq_api+=($'def services: if .services // .version then .services else . end;\n')
 mdsh_raw_jq_api+=($'def services_matching(f): services // {} | to_entries | .[] | select( .value | f ) ;\n')
-event on "change-group"   @_ generate-jq-func
-event on "create-service" @_ generate-jq-func
+event on "change-group"   @1 event on "finalize_project" generate-jq-func
+event on "create-service" @1 event on "finalize_project" generate-jq-func
 
 generate-jq-func() {
     if [[ $1 != "@current" ]]; then
+        target "$1" get; set -- "$1" "${REPLY[@]}"
         local t; printf -v t '| (.services."%s" |= f ) ' "${@:2}"
         # jq function names can only have '_' or '::', not '-' or '.'
         set -- "${1//-/::dash::}"; set -- "${1//./::dot::}"; set -- "${1/#::/_::}"
+        set -- "${1//::::/::}"
         DEFINE "def $1(f): ${t:2};"
     fi
 }
@@ -791,15 +793,23 @@ compose-singular() {
 }
 
 loco_do() {
-	[[ "${1-}" ]] || loco_usage   # No non-empty command given, exit w/usage
-	case $1 in
+	case ${1-} in
 		--*=*)    doco-optarg  "$@" ;;  # --[option]=value
 		--*)      doco-option  "$@" ;;  # --[option]
 		-[^=]=*)  doco-optarg  "$@" ;;  # -a=bcd
 		-[^=]?*)  doco-options "$@" ;;  # -abcd
 		-?)       doco-option  "$@" ;;  # -x
+		'')       doco-null-command ;;  # empty or missing command
 		*)        doco-other   "$@" ;;  # commands, services, and groups
 	esac
+}
+doco-null-command() {
+	if target "@current" exists; then
+		target "@current" get
+		${REPLY[@]+printf '%s\n' "${REPLY[@]}"}  # only output lines if there are some
+	else
+		loco_usage   # No non-empty command given and no targets specified, exit w/usage
+	fi
 }
 doco-options() {
 	if fn-exists "doco.${1:0:2}="; then
@@ -831,13 +841,12 @@ doco-optarg() {
 doco-other() {
 	if fn-exists "doco.$1"; then "doco.$@"
 	elif is-target-name "$1" && target "$1" exists; then
-		with-targets @current "$1" -- ${2+doco "${@:2}"}
+		with-targets @current "$1" -- doco "${@:2}"
 	else fail "'$1' is not a recognized option, command, service, or group"
 	fi
 }
 # Execute the rest of the command line with NO specified service(s)
 doco.--()   { with-targets -- doco "$@"; }
-doco.--all() { doco --where true "$@"; }
 doco.--dry-run() {
 	docker() { printf -v REPLY ' %q' "docker" "$@"; echo "${REPLY# }"; } >&2
 	docker-compose() { printf -v REPLY ' %q' "docker-compose" "$@"; echo "${REPLY# }"; } >&2
@@ -845,13 +854,7 @@ doco.--dry-run() {
 }
 function doco.--where=() {
     services-matching "${@:1}"
-    if (($#>1)); then
-        with-targets @current "${REPLY[@]}" -- doco "${@:2}"   # run command on matching services
-    elif ! ((${#REPLY[@]})); then
-        echo "No matching services" >&2; return 1
-    else
-        printf '%s\n' "${REPLY[@]}"   # list matching services
-    fi
+    with-targets @current "${REPLY[@]}" -- doco "${@:2}"   # run command on matching services
 }
 # Execute the rest of the command line with specified service(s)
 function doco.--with=() {

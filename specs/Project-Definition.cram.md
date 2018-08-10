@@ -20,7 +20,7 @@ Add *targets* to the named group(s), defining or redefining jq functions to map 
     $ GROUP delta-xray += echo gamma-zulu
     $ doco delta-xray ps
     docker-compose ps echo gamma-zulu
-    $ RUN_JQ -c -n '{} | delta::dash::xray(.image = "test")'
+    $ event fire "finalize_project"; RUN_JQ -c -n '{} | delta::dash::xray(.image = "test")'
     {"services":{"echo":{"image":"test"},"gamma-zulu":{"image":"test"}}}
 
 # Add to multiple groups, adding but not duplicating
@@ -28,12 +28,12 @@ Add *targets* to the named group(s), defining or redefining jq functions to map 
     $ GROUP tango delta-xray += niner gamma-zulu
     $ doco delta-xray ps
     docker-compose ps echo gamma-zulu niner
-    $ RUN_JQ -c -n '{} | delta::dash::xray(.image = "test")'
+    $ event fire "finalize_project"; RUN_JQ -c -n '{} | delta::dash::xray(.image = "test")'
     {"services":{"echo":{"image":"test"},"gamma-zulu":{"image":"test"},"niner":{"image":"test"}}}
 
     $ doco tango ps
     docker-compose ps niner gamma-zulu
-    $ RUN_JQ -c -n '{} | tango(.image = "test")'
+    $ event fire "finalize_project"; RUN_JQ -c -n '{} | tango(.image = "test")'
     {"services":{"niner":{"image":"test"},"gamma-zulu":{"image":"test"}}}
 
 # "Recursive" group expansion
@@ -63,7 +63,7 @@ Declare the named targets to be services and define jq functions for them.  `SER
     docker-compose ps alfa
 
 # jq function makes modifications to the service entry
-    $ RUN_JQ -c -n '{} | foxtrot(.image = "test")'
+    $ event fire "finalize_project"; RUN_JQ -c -n '{} | foxtrot(.image = "test")'
     {"services":{"foxtrot":{"image":"test"}}}
 ```
 

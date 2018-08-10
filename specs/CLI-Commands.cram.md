@@ -1,5 +1,22 @@
 ## Built-in Commands
 
+#### The Null Command
+
+If no arguments are given, `doco` outputs the current target service list, one item per line, and returns success.  If there is no current target, however, a usage message is output:
+
+~~~shell
+    $ (doco example1)  # explicit services/groups, map to output names
+    example1
+
+    $ (doco --all)  # output current target set
+    example1
+
+    $ (doco --)  # empty target set; outputs nothing
+
+    $ (command doco)   # no set defined = usage + error
+    Usage: doco command args...
+    [64]
+~~~
 
 #### `cmd` *flag subcommand...*
 

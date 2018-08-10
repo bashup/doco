@@ -13,12 +13,11 @@
 Configuration is loaded using loco.  Specifically, by searching for `*.doco.md`, `.doco`, or `docker-compose.yml` above the current directory.  The loco script name is hardcoded to `doco`, so even if it's run via a symlink the function names for custom subcommands will still be `doco.subcommand-name`.  User and site-level configs are also defined.
 
 ~~~shell
-    $ declare -p LOCO_FILE LOCO_NAME LOCO_USER_CONFIG LOCO_SITE_CONFIG DOCO_PROFILE
+    $ declare -p LOCO_FILE LOCO_NAME LOCO_USER_CONFIG LOCO_SITE_CONFIG
     declare -a LOCO_FILE=([0]="?*[-.]doco.md" [1]=".doco" [2]="docker-compose.yml")
     declare -- LOCO_NAME="doco"
     declare -- LOCO_USER_CONFIG="/*/.config/doco" (glob)
     declare -- LOCO_SITE_CONFIG="/etc/doco/config"
-    declare -- DOCO_PROFILE=""
 ~~~
 
 ### Project-Level Configuration
@@ -93,11 +92,21 @@ Either way, service targets are created for any services that don't already have
     declare -x COMPOSE_FILE="/*/Config.cram.md/t/.doco-cache.json (glob)
     /*/Config.cram.md/t/docker-compose.override.yaml" (glob)
 
-# .env file is auto-loaded, using docker-compose .env syntax, running DOCO_PROFILE
-    $ { echo "FOO=baz'bar"; echo "DOCO_PROFILE=echo hi!"; } >.env
-    $ echo 'doco.dump() { echo "${DOCO_SERVICES[@]}"; echo "$FOO"; }' >.doco
+# .env file is auto-loaded, using docker-compose .env syntax, and
+# the "finalize_project" and "before_commands" events are run:
+
+    $ echo "FOO=baz'bar" >.env
+
+    $ cat <<'EOF' >.doco
+    > doco.dump() { echo "${DOCO_SERVICES[@]}"; echo "$FOO"; }
+    > event on "finalize_project" echo "hi!"
+    > event on "before_commands" target --all get
+    > event on "before_commands" declare -p REPLY
+    > EOF
+
     $ command doco t dump
     hi!
+    declare -a REPLY=([0]="t")
     t
     baz'bar
 

@@ -28,7 +28,6 @@ loco_preconfig() {
     LOCO_NAME=doco
     LOCO_USER_CONFIG=$HOME/.config/doco
     LOCO_SITE_CONFIG=/etc/doco/config
-    DOCO_PROFILE=
 }
 ```
 
@@ -57,9 +56,10 @@ loco_loadproject() {
         ;;
     esac
 
-    eval "$DOCO_PROFILE"  # allow overriding the final configuration
+    event fire "finalize_project"  # allow overriding the final compose project def
     RUN_JQ -c -n >"$json"; DOCO_CONFIG=$json; services-matching || return
-    ${REPLY[@]+SERVICES "${REPLY[@]}"}   # ensure SERVICES exist for all services
+    GROUP --all := "${REPLY[@]}"   # ensure SERVICES exist for all services
+    event fire "before_commands"   # hook to set up aliases, custom commands, etc.
 }
 
 # Run a command with variants accepted by docker-compose, first checking that

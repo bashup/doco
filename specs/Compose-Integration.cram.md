@@ -22,6 +22,7 @@ Subcommands that accept multiple services get any services in the current servic
     $ (GROUP foo2 += bar; doco foo2 ps)
     docker-compose ps bar
     $ (GROUP foo2 += bar; doco foo2 bar)
+    bar
 ```
 
 #### Non-Service Subcommands
