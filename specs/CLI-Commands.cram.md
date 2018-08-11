@@ -24,6 +24,46 @@ If no arguments are given, `doco` outputs the current target service list, one i
     [64]
 ~~~
 
+#### Command Name Tracing
+
+The name of the current command is tracked in `DOCO_COMMAND`; it's set to the name of the first `doco` subcommand run since the most recent setting of targets (other than `--with-default`).  (This allows error messages to know what command the arguments were passed to.)
+
+~~~shell
+# First command is 'declare'
+
+    $ doco declare DOCO_COMMAND
+    declare -- DOCO_COMMAND="declare"
+
+    $ doco example1 declare DOCO_COMMAND
+    declare -- DOCO_COMMAND="declare"
+
+# First command is 'mycmd'
+
+    $ doco.mycmd() { doco declare "$@"; }
+
+    $ doco mycmd DOCO_COMMAND
+    declare -- DOCO_COMMAND="mycmd"
+
+    $ doco example1 mycmd DOCO_COMMAND
+    declare -- DOCO_COMMAND="mycmd"
+
+# First command since change in targets is 'declare'
+
+    $ doco.mycmd() { doco example1 declare "$@"; }
+
+    $ doco mycmd DOCO_COMMAND
+    declare -- DOCO_COMMAND="declare"
+
+# First command since non-default change in targets is 'mycmd'
+
+    $ doco.mycmd() { doco --with-default example1 declare "$@"; }
+
+    $ doco mycmd DOCO_COMMAND
+    declare -- DOCO_COMMAND="mycmd"
+~~~
+
+
+
 #### `cmd` *flag subcommand...*
 
 Shorthand for `--with-default cmd-default --require-services` *flag subcommand...*.  That is, if the current service set is empty, it defaults to the `cmd-default` target, if defined.  The number of services is then verified with `--require-services` before executing *subcommand*.  This makes it easy to define new subcommands that work on a default container or group of containers.  (For example, the `doco sh` command is defined as `doco cmd 1 exec bash "$@"` -- i.e., it runs on exactly one service, defaulting to the `cmd-default` group.)
@@ -128,4 +168,8 @@ Any functions defined via jqmd's facilities  (`DEFINES`, `IMPORTS`, `jq defs` bl
 
     $ GROUP cmd-default += foxtrot; doco sh -c 'echo foo'
     docker-compose exec foxtrot bash -c echo\ foo
+
+    $ GROUP cmd-default := ; doco sh -c 'echo foo'
+    no services specified for sh
+    [64]
 ~~~

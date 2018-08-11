@@ -99,13 +99,14 @@ If a name passed to doco on the command line isn't recognized as an option, it's
 ```shell
 doco-other() {
 	if fn-exists "doco.$1"; then
-		local DOCO_COMMAND=${DOCO_COMMAND:-$1}
-		"doco.$@"
+		with-command "${DOCO_COMMAND:-$1}" "doco.$@"
 	elif is-target-name "$1" && target "$1" exists; then
 		with-targets @current "$1" -- doco "${@:2}"
 	else fail "'$1' is not a recognized option, command, service, or group"
 	fi
 }
+
+with-command() { local DOCO_COMMAND=$1; "${@:2}"; }
 ```
 
 ### doco options
@@ -170,7 +171,7 @@ Invoke `doco` *subcommand args...*, adding *target* to the current service set i
 ```shell
 function doco.--with-default=() {
     if target @current has-count || ! target "$1" exists; then doco "${@:2}"
-    else with-targets "$1" -- doco "${@:2}"; fi
+    else with-targets "$1" -- with-command "${DOCO_COMMAND-}" doco "${@:2}"; fi
 }
 ```
 
