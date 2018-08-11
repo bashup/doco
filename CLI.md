@@ -28,16 +28,19 @@
 doco parses options and commands with support for GNU-like short and long options.  Multiple usage patterns are supported, including breaking strings like `-xyzabc` into `-x -y -z=abc` (if `-z` takes an argument and `-x` and `-y` don't).  Option values can use explicit `=` (e.g. `--foo=bar`, `-z=q`), separate arguments (`--foo bar`, `-z q`), or even optional arguments (where `=` invokes a different code path than the standalone option).
 
 ```shell
+doco_had_args=0  # times doco has been called with arguments
+
 loco_do() {
 	project-is-finalized ||
 		fail "doco CLI cannot be used before the project spec is finalized" || return
+	(( ! $# )) || doco_had_args=1
 	case ${1-} in
 		--*=*)    doco-optarg  "$@" ;;  # --[option]=value
 		--*)      doco-option  "$@" ;;  # --[option]
 		-[^=]=*)  doco-optarg  "$@" ;;  # -a=bcd
 		-[^=]?*)  doco-options "$@" ;;  # -abcd
 		-?)       doco-option  "$@" ;;  # -x
-		'')       doco-null-command ;;  # empty or missing command
+		'')       doco-null    "$@" ;;  # empty or missing command
 		*)        doco-other   "$@" ;;  # commands, services, and groups
 	esac
 }
@@ -48,8 +51,8 @@ loco_do() {
 If no arguments are given, `doco` outputs the current target service list, one item per line, and returns success.  If there is no current target, however, a usage message is output:
 
 ```shell
-doco-null-command() {
-	if target "@current" exists; then
+doco-null() {
+	if ((doco_had_args && ! $#)); then
 		target "@current" get
 		${REPLY[@]+printf '%s\n' "${REPLY[@]}"}  # only output lines if there are some
 	else
@@ -113,13 +116,13 @@ with-command() { local DOCO_COMMAND=$1; "${@:2}"; }
 
 #### `--`
 
-Explicitly set the active service set to empty and disable doco's support for default command targets for the remainder of the command line.
+Reset the active service set to empty (and non-existent).  In terms of target selection, everything after the `--` executes as if it were the first thing on the command line passed to doco, with any prior targets discarded.
 
 If no services are explicitly added after this point in the command line, then docker-compose subcommands will have their default behavior and argument parsing.  (That is, commands that take multiple services will apply to all services unless a service is listed, and commands that apply to a single service will require it as the first post-option argument.)
 
 ```shell
-# Execute the rest of the command line with NO specified service(s)
-doco.--()   { with-targets -- doco "$@"; }
+# Execute the rest of the command line without specified services
+doco.--() { without-targets doco "$@"; }
 ```
 
 #### `--all`
@@ -261,6 +264,6 @@ doco.jq() { RUN_JQ "$@" <"$DOCO_CONFIG"; }
 `doco sh` *args...* executes `bash` *args* in the specified service's container.  If no service is specified, it defaults to the `cmd-default` target.  Multiple services are not allowed, unless you preface `sh` with `foreach`.
 
 ```shell
-doco.sh() { doco cmd 1 exec bash "$@"; }
+doco.sh() { doco --with-default cmd-default exec bash "$@"; }
 ```
 

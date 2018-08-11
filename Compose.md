@@ -163,19 +163,13 @@ compose-singular() {
 		argv+=("$1"); if [[ $1 =~ $opts ]]; then shift; argv+=("$1"); fi
     done
 
-	if ! any-target @current || ! ((${#REPLY[@]})) ; then
-		# no current or default target, check command line for one
-		if ((! $#)) || ! target "$1" get; then
-			fail "No service/group specified for $cmd" || return
-		else
-			shift  # remove the explicit target from the tail
-		fi
+	if ! any-target @current; then
+		# no current or default target, check command line for one and remove it
+		if is-target-name "${1-}" && target "$1" get exists; then shift; fi
 	fi
-	if ((${#REPLY[@]} != 1)); then
-		with-targets "${REPLY[@]}" -- require-services 1 "$cmd"
-	else
-		compose "${argv[@]}" "${REPLY[@]}" "$@"
-	fi
+
+	with-targets "${REPLY[@]}" -- require-services 1 "${DOCO_COMMAND:-$cmd}" || return
+	compose "${argv[@]}" "${REPLY[@]}" "$@"
 }
 
 ```

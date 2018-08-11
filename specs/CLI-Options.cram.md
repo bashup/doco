@@ -8,7 +8,7 @@
 
 #### `--`
 
-Explicitly set the active service set to empty and disable doco's support for default command targets for the remainder of the command line.
+Reset the active service set to empty (and non-existent).  In terms of target selection, everything after the `--` executes as if it were the first thing on the command line passed to doco, with any prior targets discarded.
 
 If no services are explicitly added after this point in the command line, then docker-compose subcommands will have their default behavior and argument parsing.  (That is, commands that take multiple services will apply to all services unless a service is listed, and commands that apply to a single service will require it as the first post-option argument.)
 
