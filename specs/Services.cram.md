@@ -24,7 +24,7 @@ Invoke *cmd args...* once for each service in the current service set; the servi
     foo
     bar
     $ foreach-service eval 'echo "${DOCO_SERVICES[@]}"'
-~~~~
+~~~
 
 #### `have-services` *[compexpr]*
 
@@ -53,62 +53,29 @@ Returns the project name or container name of the specified service in `REPLY`. 
     foo_bar_3
 ~~~
 
-#### `require-services` *flag command-name*
+#### `quantify-services` *quantifier command-name [services...]*
 
-Checks the number of services in the first existing *target*, based on *flag*.  (If no *targets* are given, the `@current` service set is checked.)  On return, `${REPLY[@]}` contains the list of services retrieved from the first existing *target*.
+Checks the number of *services* supplied, based on *flag*.  Returns without changing `${REPLY[@]}`.
 
-If *flag* is `1`, then the list must contain exactly one service; if `-`, then 0 or 1 services are acceptable.  `+` means 1 or more services are required.  A *flag* of `.` is a no-op; i.e. any service count is acceptable.
+If *quantifier* is `1`, then the list must contain exactly one service; if `-`, then 0 or 1 services are acceptable.  `+` means 1 or more services are required.  A *quantifier* of `.` is a no-op; i.e. any service count is acceptable.
 
-If the number of services in the first existing *target* does not match the requirement, failure is returned, with a usage error using *command-name*.  (If no *command-name* is given, the current `DOCO_COMMAND` is used, or failing that, the words "the current command".)
+If the number of services does not match the *quantifier*, failure is returned, with a usage error containing *command-name*.  (If *command-name* is empty or not given, the current `DOCO_COMMAND` is used, or failing that, the words "the current command".)
 
 ~~~shell
 # First argument is validated
 
-    $ require-services
-    require-services first argument must be ., -, +, or 1
+    $ quantify-services
+    service quantifier must be ., -, +, or 1
     [64]
 
-    $ require-services x
-    require-services first argument must be ., -, +, or 1
+    $ quantify-services x
+    service quantifier must be ., -, +, or 1
     [64]
-
-# Check current set, default command name, require at least one service
-
-    $ require-services +
-    no services specified for the current command
-    [64]
-
-# Empty list returned, since @current was empty
-
-    $ declare -p REPLY
-    declare -a REPLY=()
-
-# Multiple targets given, require at most one service
-
-    $ with-targets x y -- require-services - SomeCommand
-    SomeCommand cannot be used on multiple services
-    [64]
-
-# The targets are in REPLY
-
-    $ declare -p REPLY
-    declare -a REPLY=([0]="x" [1]="y")
-
-# Explicit requirements: first existing group or target is checked and returned
-
-    $ GROUP empty :=
-    $ GROUP xy := x y
-
-    $ require-services . test not-real empty xy && declare -p REPLY
-    declare -a REPLY=()
-
-    $ require-services . test not-real also-not-real xy empty && declare -p REPLY
-    declare -a REPLY=([0]="x" [1]="y")
 
 # Test harness for exhaustive condition checking
 
-    $ doco.test-rs() { require-services "$1" || return; echo success; }
-    $ test-rs() { (doco -- "${@:2}" test-rs "$1") || echo "[$?]"; }
+    $ doco.test-rs() { quantify-services "$1" "" "${@:2}" || return; echo success; }
+    $ test-rs() { doco test-rs "$@" || echo "[$?]"; }
     $ test-rs-all() { test-rs $1; test-rs $1 x y; test-rs $1 foo; }
 
 # 1 = exactly one service
@@ -142,6 +109,47 @@ If the number of services in the first existing *target* does not match the requ
     success
     success
     success
+~~~
+
+#### `require-services` *quantifier command-name [targets...]*
+
+Like `quantify-services` except that the first existing *target* is checked against *quantifier*.  If no *targets* are given, the `@current` service set is checked.
+
+On success, `${REPLY[@]}` contains the list of services retrieved from the first existing *target*.
+
+~~~shell
+# Check current set, default command name, require at least one service
+
+    $ require-services +
+    no services specified for the current command
+    [64]
+
+# Empty list returned, since @current was empty
+
+    $ declare -p REPLY
+    declare -a REPLY=()
+
+# Multiple targets given, require at most one service
+
+    $ with-targets x y -- require-services - SomeCommand
+    SomeCommand cannot be used on multiple services
+    [64]
+
+# The targets are in REPLY
+
+    $ declare -p REPLY
+    declare -a REPLY=([0]="x" [1]="y")
+
+# Explicit requirements: first existing group or target is checked and returned
+
+    $ GROUP empty :=
+    $ GROUP xy := x y
+
+    $ require-services . test not-real empty xy && declare -p REPLY
+    declare -a REPLY=()
+
+    $ require-services . test not-real also-not-real xy empty && declare -p REPLY
+    declare -a REPLY=([0]="x" [1]="y")
 ~~~
 
 #### `services-matching` *[jq-filter]*

@@ -674,17 +674,20 @@ project-name() {
     REPLY=${REPLY//[^[:alnum:]]/}; REPLY=${REPLY,,}  # lowercase and remove non-alphanumerics
     ! (($#)) || REPLY=$REPLY"_${1}_${2-1}"           # container name
 }
-require-services() {
+quantify-services() {
 	[[ ${1-} == [-+1.] ]] ||
-		fail "require-services first argument must be ., -, +, or 1" || return
-	(($#>1)) || set -- "$1" "${DOCO_COMMAND:-the current command}"
-	(($#>2)) || set -- "$1" "$2" @current
-	any-target "${@:3}" || true
-	case "$1${#REPLY[@]}" in
+		fail "service quantifier must be ., -, +, or 1" || return
+	set -- "$1" "${2-}" "${@:3}"
+	set -- "$1$(($#-2))" "${2:-${DOCO_COMMAND:-the current command}}"
+	case $1 in
 		?1|-0|.*) return ;;  # 1 is always acceptable
 		?0)    fail "no services specified for $2" ;;
 		[-1]*) fail "$2 cannot be used on multiple services" ;;
 	esac
+}
+require-services() {
+	if (($#>2)); then any-target "${@:3}" || true; else target @current get; fi
+	quantify-services "${1-}" "${2-}" "${REPLY[@]}"
 }
 services-matching() {
 	REPLY=()
@@ -799,7 +802,7 @@ doco.version() { docker-compose     version "$@"; }
 compose-targeted() {
 	if any-target @current; then
 		# Non-default target; make sure it's not empty
-		with-targets "${REPLY[@]}" -- require-services + "${DOCO_COMMAND:-$1}" || return
+		quantify-services + "${DOCO_COMMAND:-$1}" "${REPLY[@]}" || return
     fi
 	compose "$@" "${REPLY[@]}"
 }
@@ -823,7 +826,7 @@ compose-singular() {
 		if is-target-name "${1-}" && target "$1" get exists; then shift; fi
 	fi
 
-	with-targets "${REPLY[@]}" -- require-services 1 "${DOCO_COMMAND:-$cmd}" || return
+	quantify-services 1 "${DOCO_COMMAND:-$cmd}" "${REPLY[@]}" || return
 	compose "${argv[@]}" "${REPLY[@]}" "$@"
 }
 

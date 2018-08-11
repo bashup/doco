@@ -131,7 +131,7 @@ Subcommands that accept multiple services get any services in the current servic
 compose-targeted() {
 	if any-target @current; then
 		# Non-default target; make sure it's not empty
-		with-targets "${REPLY[@]}" -- require-services + "${DOCO_COMMAND:-$1}" || return
+		quantify-services + "${DOCO_COMMAND:-$1}" "${REPLY[@]}" || return
     fi
 	compose "$@" "${REPLY[@]}"
 }
@@ -171,7 +171,7 @@ compose-singular() {
 		if is-target-name "${1-}" && target "$1" get exists; then shift; fi
 	fi
 
-	with-targets "${REPLY[@]}" -- require-services 1 "${DOCO_COMMAND:-$cmd}" || return
+	quantify-services 1 "${DOCO_COMMAND:-$cmd}" "${REPLY[@]}" || return
 	compose "${argv[@]}" "${REPLY[@]}" "$@"
 }
 

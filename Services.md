@@ -40,26 +40,38 @@ project-name() {
 }
 ```
 
-#### `require-services` *flag command-name [targets...]*
+#### `quantify-services` *quantifier command-name [services...]*
 
-Checks the number of services in the first existing *target*, based on *flag*.  (If no *targets* are given, the `@current` service set is checked.)  On return, `${REPLY[@]}` contains the list of services retrieved from the first existing *target*.
+Checks the number of *services* supplied, based on *flag*.  Returns without changing `${REPLY[@]}`.
 
-If *flag* is `1`, then the list must contain exactly one service; if `-`, then 0 or 1 services are acceptable.  `+` means 1 or more services are required.  A *flag* of `.` is a no-op; i.e. any service count is acceptable.
+If *quantifier* is `1`, then the list must contain exactly one service; if `-`, then 0 or 1 services are acceptable.  `+` means 1 or more services are required.  A *quantifier* of `.` is a no-op; i.e. any service count is acceptable.
 
-If the number of services in the first existing *target* does not match the requirement, failure is returned, with a usage error using *command-name*.  (If no *command-name* is given, the current `DOCO_COMMAND` is used, or failing that, the words "the current command".)
+If the number of services does not match the *quantifier*, failure is returned, with a usage error containing *command-name*.  (If *command-name* is empty or not given, the current `DOCO_COMMAND` is used, or failing that, the words "the current command".)
 
 ```shell
-require-services() {
+quantify-services() {
 	[[ ${1-} == [-+1.] ]] ||
-		fail "require-services first argument must be ., -, +, or 1" || return
-	(($#>1)) || set -- "$1" "${DOCO_COMMAND:-the current command}"
-	(($#>2)) || set -- "$1" "$2" @current
-	any-target "${@:3}" || true
-	case "$1${#REPLY[@]}" in
+		fail "service quantifier must be ., -, +, or 1" || return
+	set -- "$1" "${2-}" "${@:3}"
+	set -- "$1$(($#-2))" "${2:-${DOCO_COMMAND:-the current command}}"
+	case $1 in
 		?1|-0|.*) return ;;  # 1 is always acceptable
 		?0)    fail "no services specified for $2" ;;
 		[-1]*) fail "$2 cannot be used on multiple services" ;;
 	esac
+}
+```
+
+#### `require-services` *quantifier command-name [targets...]*
+
+Like `quantify-services` except that the first existing *target* is checked against *quantifier*.  If no *targets* are given, the `@current` service set is checked.
+
+On success, `${REPLY[@]}` contains the list of services retrieved from the first existing *target*.
+
+```shell
+require-services() {
+	if (($#>2)); then any-target "${@:3}" || true; else target @current get; fi
+	quantify-services "${1-}" "${2-}" "${REPLY[@]}"
 }
 ```
 
