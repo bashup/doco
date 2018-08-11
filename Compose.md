@@ -124,12 +124,15 @@ doco.version() { docker-compose     version "$@"; }
 
 #### Multi-Service Subcommands
 
-Subcommands that accept multiple services get any services in the current service set appended to the command line.  (The service set is empty by default, causing docker-compose to apply commands to all services by default.)
+Subcommands that accept multiple services get any services in the current service set appended to the command line.  (The service set is empty by default, causing docker-compose to apply commands to all services by default.)  If any targets have been explicitly specified, there must be at least one service in the current set.
 
 ```shell
 # Commands that accept services
 compose-targeted() {
-	any-target @current || true  # ok if none are set
+	if any-target @current; then
+		# Non-default target; make sure it's not empty
+		with-targets "${REPLY[@]}" -- require-services + "${DOCO_COMMAND:-$1}" || return
+    fi
 	compose "$@" "${REPLY[@]}"
 }
 ```

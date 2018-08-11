@@ -600,8 +600,8 @@ doco-target::__create() {
 	event resolve "created $1 $TARGET_NAME" "$TARGET_NAME"
 }
 
-doco-target::get() { REPLY=("${TARGET[@]}"); this "${1-exists}" "${@:2}"; }
-doco-target::has-count() { REPLY=("${TARGET[@]}"); eval "(( ${#REPLY[@]} ${1-} ))"; }
+doco-target::get() { REPLY=("${TARGET[@]}"); this "$@"; }
+doco-target::has-count() { this get; eval "(( ${#REPLY[@]} ${1-} ))"; }
 
 doco-target::readonly() { readonly "${TARGET_VAR}"; this "$@"; }
 
@@ -617,23 +617,38 @@ doco-target::set() {
 
 doco-target::set-default() { this exists || this set "$@"; }
 
+doco-target::foreach() {
+	this get; for REPLY in "${REPLY[@]}"; do with-targets "$REPLY" -- "$@"; done
+}
 @current-target::set() { fail "@current group is read-only"; }
 @current-target::declare-service() { fail "@current is a group, but a service was expected"; }
 @current-target::declare-group() { :; }
 
+@current-target::exists() { [[ ${HAVE_SERVICES-} ]]; }
+@current-target::get() {
+	REPLY=(); [[ ! ${HAVE_SERVICES-} ]] || REPLY=("${TARGET[@]}"); this "$@"
+}
+
 with-targets() {
 	local s=(); while (($#)) && [[ $1 != -- ]]; do s+=("$1"); shift; done
 	all-targets "${s[@]}" || return
-	# oh bash, why do you hate us so...
-	local DOCO_SERVICES; DOCO_SERVICES=("${REPLY[@]}"); readonly DOCO_SERVICES
-	"${@:2}"
+	__apply-targets = "${REPLY[@]}" -- "${@:2}"
 }
 
+without-targets() { __apply-targets '' -- "$@"; }
+
+__apply-targets() {
+	local HAVE_SERVICES=$1 DOCO_SERVICES DOCO_COMMAND
+	DOCO_SERVICES=(); shift
+	while (($#)) && [[ $1 != -- ]]; do DOCO_SERVICES+=("$1"); shift; done
+	readonly DOCO_SERVICES
+	"${@:2}"
+}
 # set REPLY to merge of all given target names
 all-targets() {
 	local services=()
 	while (($#)); do
-		target "$1" get || [[ $1 == @current ]] ||
+		target "$1" get exists || [[ $1 == @current ]] ||
 			fail "'$1' is not a known group or service" || return
 		for REPLY in "${REPLY[@]}"; do
 			[[ " ${services[*]-} " == *" $REPLY "* ]] || services+=("$REPLY")
@@ -646,16 +661,12 @@ all-targets() {
 # set REPLY to contents of the first existing target
 any-target() {
 	for REPLY; do
-		if target "$REPLY" get; then return ; fi
+		if target "$REPLY" get exists; then return ; fi
 	done
 	REPLY=(); false
 }
 
-foreach-service() {
-    for REPLY in ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}; do
-        with-targets "$REPLY" -- "$@"
-    done
-}
+foreach-service() { target @current foreach "$@"; }
 have-services() { target @current has-count "$@"; }
 project-name() {
     REPLY=${COMPOSE_PROJECT_NAME-}
@@ -664,12 +675,16 @@ project-name() {
     ! (($#)) || REPLY=$REPLY"_${1}_${2-1}"           # container name
 }
 require-services() {
-    local REPLY=("${DOCO_SERVICES[@]}")
-    case "$1${#REPLY[@]}" in
-    ?1|-0|.*) return ;;  # 1 is always acceptable
-    ?0)    fail "no services specified for $2" ;;
-    [-1]*) fail "$2 cannot be used on multiple services" ;;
-    esac
+	[[ ${1-} == [-+1.] ]] ||
+		fail "require-services first argument must be ., -, +, or 1" || return
+	(($#>1)) || set -- "$1" "${DOCO_COMMAND:-the current command}"
+	(($#>2)) || set -- "$1" "$2" @current
+	any-target "${@:3}" || true
+	case "$1${#REPLY[@]}" in
+		?1|-0|.*) return ;;  # 1 is always acceptable
+		?0)    fail "no services specified for $2" ;;
+		[-1]*) fail "$2 cannot be used on multiple services" ;;
+	esac
 }
 services-matching() {
 	REPLY=()
@@ -703,7 +718,7 @@ generate-jq-func() {
 }
 ALIAS() { mdsh-splitwords "$1"; GROUP "${REPLY[@]}" += "${@:2}"; }
 alias-exists() { target "$1" exists; }
-get-alias() { target "$1" get || true; }
+get-alias() { target "$1" get; }
 set-alias() { target "$1" set "$@"; }
 with-alias() { target "$1" call "${@:2}"; }
 with-service() { mdsh-splitwords "$1"; with-targets @current "${REPLY[@]}" -- "${@:2}"; }
@@ -782,7 +797,10 @@ doco.version() { docker-compose     version "$@"; }
 
 # Commands that accept services
 compose-targeted() {
-	any-target @current || true  # ok if none are set
+	if any-target @current; then
+		# Non-default target; make sure it's not empty
+		with-targets "${REPLY[@]}" -- require-services + "${DOCO_COMMAND:-$1}" || return
+    fi
 	compose "$@" "${REPLY[@]}"
 }
 # Commands that don't accept a list of services
@@ -800,36 +818,33 @@ compose-singular() {
 		argv+=("$1"); if [[ $1 =~ $opts ]]; then shift; argv+=("$1"); fi
     done
 
-	if ! any-target @current || ! ((${#REPLY[@]})) ; then
-		# no current or default target, check command line for one
-		if ((! $#)) || ! target "$1" get; then
-			fail "No service/group specified for $cmd" || return
-		else
-			shift  # remove the explicit target from the tail
-		fi
+	if ! any-target @current; then
+		# no current or default target, check command line for one and remove it
+		if is-target-name "${1-}" && target "$1" get exists; then shift; fi
 	fi
-	if ((${#REPLY[@]} != 1)); then
-		with-targets "${REPLY[@]}" -- require-services 1 "$cmd"
-	else
-		compose "${argv[@]}" "${REPLY[@]}" "$@"
-	fi
+
+	with-targets "${REPLY[@]}" -- require-services 1 "${DOCO_COMMAND:-$cmd}" || return
+	compose "${argv[@]}" "${REPLY[@]}" "$@"
 }
+
+doco_had_args=0  # times doco has been called with arguments
 
 loco_do() {
 	project-is-finalized ||
 		fail "doco CLI cannot be used before the project spec is finalized" || return
+	(( ! $# )) || doco_had_args=1
 	case ${1-} in
 		--*=*)    doco-optarg  "$@" ;;  # --[option]=value
 		--*)      doco-option  "$@" ;;  # --[option]
 		-[^=]=*)  doco-optarg  "$@" ;;  # -a=bcd
 		-[^=]?*)  doco-options "$@" ;;  # -abcd
 		-?)       doco-option  "$@" ;;  # -x
-		'')       doco-null-command ;;  # empty or missing command
+		'')       doco-null    "$@" ;;  # empty or missing command
 		*)        doco-other   "$@" ;;  # commands, services, and groups
 	esac
 }
-doco-null-command() {
-	if target "@current" exists; then
+doco-null() {
+	if ((doco_had_args && ! $#)); then
 		target "@current" get
 		${REPLY[@]+printf '%s\n' "${REPLY[@]}"}  # only output lines if there are some
 	else
@@ -864,14 +879,17 @@ doco-optarg() {
 	fi
 }
 doco-other() {
-	if fn-exists "doco.$1"; then "doco.$@"
+	if fn-exists "doco.$1"; then
+		with-command "${DOCO_COMMAND:-$1}" "doco.$@"
 	elif is-target-name "$1" && target "$1" exists; then
 		with-targets @current "$1" -- doco "${@:2}"
 	else fail "'$1' is not a recognized option, command, service, or group"
 	fi
 }
-# Execute the rest of the command line with NO specified service(s)
-doco.--()   { with-targets -- doco "$@"; }
+
+with-command() { local DOCO_COMMAND=$1; "${@:2}"; }
+# Execute the rest of the command line without specified services
+doco.--() { without-targets doco "$@"; }
 doco.--dry-run() {
 	docker() { printf -v REPLY ' %q' "docker" "$@"; echo "${REPLY# }"; } >&2
 	docker-compose() { printf -v REPLY ' %q' "docker-compose" "$@"; echo "${REPLY# }"; } >&2
@@ -887,36 +905,38 @@ function doco.--with=() {
 }
 function doco.--with-default=() {
     if target @current has-count || ! target "$1" exists; then doco "${@:2}"
-    else with-targets "$1" -- doco "${@:2}"; fi
+    else with-targets "$1" -- with-command "${DOCO_COMMAND-}" doco "${@:2}"; fi
 }
 function doco.--require-services=() {
     [[ ${1:0:1} == [-+1.] ]] || loco_error "--require-services argument must begin with ., -, +, or 1"
-    mdsh-splitwords "$1" && require-services "${REPLY[@]}" "${2-}" && doco "${@:2}";
+    mdsh-splitwords "$1"; ((${#REPLY[@]}>1)) || REPLY+=("${DOCO_COMMAND:-${2-}}")
+    require-services "${REPLY[@]:0:2}" && doco "${@:2}"
 }
-doco.cmd() { doco --with-default cmd-default --require-services "$@"; }
+doco.cmd() {
+	[[ ${DOCO_COMMAND-} != cmd ]] || local DOCO_COMMAND=$2
+	doco --with-default cmd-default --require-services "$@"
+}
 doco.cp() {
     local opts=() seen=''
     while (($#)); do
         case "$1" in
         -a|--archive|-L|--follow-link) opts+=("$1") ;;
         --help|-h) docker help cp || true; return ;;
-        -*) loco_error "Unrecognized option $1; see 'docker help cp'" ;;
+        -*) fail "Unrecognized option $1; see 'docker help cp'" || return ;;
         *) break ;;
         esac
         shift
     done
-    (($# == 2)) || loco_error "cp requires two non-option arguments (src and dest)"
+    (($# == 2)) || fail "cp requires two non-option arguments (src and dest)" || return
     while (($#)); do
         if [[ $1 == *:* ]]; then
-            [[ ! "$seen" ]] || loco_error "cp: only one argument may contain a :"
+            [[ ! "$seen" ]] || fail "cp: only one argument may contain a :" || return
             seen=yes
             if [[ "${1%%:*}" ]]; then
                 project-name "${1%%:*}"; set -- "$REPLY:${1#*:}" "${@:2}"
-            elif have-services '==1'; then
-                project-name "${DOCO_SERVICES[0]}"; set -- "$REPLY$1" "${@:2}"
             else
-                doco --with-default=shell-default --require-services=1 cp "${opts[@]}" "$@"
-                return
+                require-services 1 cp @current shell-default || return
+                project-name "$REPLY"; set -- "$REPLY$1" "${@:2}"
             fi
         elif [[ $1 != /* && $1 != - ]]; then
             # make paths relative to original run directory
@@ -924,12 +944,12 @@ doco.cp() {
         fi
         opts+=("$1"); shift
     done
-    [[ "$seen" ]] || loco_error "cp: either source or destination must contain a :"
+    [[ "$seen" ]] || fail "cp: either source or destination must contain a :" || return
     docker cp ${opts[@]+"${opts[@]}"}
 }
 doco.foreach() { foreach-service doco "$@"; }
 doco.jq() { RUN_JQ "$@" <"$DOCO_CONFIG"; }
-doco.sh() { doco cmd 1 exec bash "$@"; }
+doco.sh() { doco --with-default cmd-default exec bash "$@"; }
 DEFINE "${mdsh_raw_jq_api[*]}"
 
 # shellcheck disable=SC2059  # argument is a printf format string

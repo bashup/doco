@@ -37,7 +37,8 @@ Add services matching *jq-filter* to the current service set for the remainder o
     example1
     $ doco --where false
     $ doco --where=false ps
-    docker-compose ps
+    no services specified for ps
+    [64]
     $ doco --where=true ps
     docker-compose ps example1
 ~~~

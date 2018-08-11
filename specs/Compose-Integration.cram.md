@@ -19,15 +19,23 @@
 
 #### Multi-Service Subcommands
 
-Subcommands that accept multiple services get any services in the current service set appended to the command line.  (The service set is empty by default, causing docker-compose to apply commands to all services by default.)
+Subcommands that accept multiple services get any services in the current service set appended to the command line.  (The service set is empty by default, causing docker-compose to apply commands to all services by default.)  If any targets have been explicitly specified, there must be at least one service in the current set.
 
 ```shell
     $ doco foo2
     'foo2' is not a recognized option, command, service, or group
     [64]
-    $ (GROUP foo2 += bar; doco foo2 ps)
+
+    $ GROUP foo2 :=
+    $ doco foo2 ps
+    no services specified for ps
+    [64]
+
+    $ GROUP foo2 += bar
+    $ doco foo2 ps
     docker-compose ps bar
-    $ (GROUP foo2 += bar; doco foo2 bar)
+
+    $ doco foo2 bar
     bar
 ```
 
