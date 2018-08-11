@@ -126,7 +126,7 @@ generate-jq-func() {
 ### Legacy API (Deprecated)
 
 ```shell
-ALIAS() { mdsh-splitwords "$1"; GROUP "${REPLY[@}}" += "$@"; }
+ALIAS() { mdsh-splitwords "$1"; GROUP "${REPLY[@]}" += "${@:2}"; }
 alias-exists() { target "$1" exists; }
 get-alias() { target "$1" get || true; }
 set-alias() { target "$1" set "$@"; }
