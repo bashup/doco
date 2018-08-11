@@ -71,8 +71,8 @@ doco-target::__create() {
 ### Target Contents
 
 ```shell
-doco-target::get() { REPLY=("${TARGET[@]}"); this "${1-exists}" "${@:2}"; }
-doco-target::has-count() { REPLY=("${TARGET[@]}"); eval "(( ${#REPLY[@]} ${1-} ))"; }
+doco-target::get() { REPLY=("${TARGET[@]}"); this "$@"; }
+doco-target::has-count() { this get; eval "(( ${#REPLY[@]} ${1-} ))"; }
 
 doco-target::readonly() { readonly "${TARGET_VAR}"; this "$@"; }
 
@@ -88,27 +88,42 @@ doco-target::set() {
 
 doco-target::set-default() { this exists || this set "$@"; }
 
+doco-target::foreach() {
+	this get; for REPLY in "${REPLY[@]}"; do with-targets "$REPLY" -- "$@"; done
+}
 ```
 
 ### The Current Target
 
 The `@current` target is a read-only target that maps to the variable `DOCO_SERVICES` (the array of service names that will be passed to docker-compose).  The name `@current` is an intentionally invalid container name, so it can't collide with any actual groups or services, and it can't be turned into a service by adding its own name to it.  It can only ever be nonexistent or a group.
 
-The current target can be set for the duration of a single command/function call using `with-targets` *names* `--` *command...*; you can include `@current` in the name list to add the other names to the existing target set.
+The current target can be set for the duration of a single command/function call using `with-targets` *names* `--` *command...*; you can include `@current` in the name list to add the other names to the existing target set.  `without-targets` is similar, except that it doesn't take any targets and makes `@current` not exist (instead of just being empty).
 
 ```shell
 @current-target::set() { fail "@current group is read-only"; }
 @current-target::declare-service() { fail "@current is a group, but a service was expected"; }
 @current-target::declare-group() { :; }
 
+@current-target::exists() { [[ ${HAVE_SERVICES-} ]]; }
+@current-target::get() {
+	REPLY=(); [[ ! ${HAVE_SERVICES-} ]] || REPLY=("${TARGET[@]}"); this "$@"
+}
+
 with-targets() {
 	local s=(); while (($#)) && [[ $1 != -- ]]; do s+=("$1"); shift; done
 	all-targets "${s[@]}" || return
-	# oh bash, why do you hate us so...
-	local DOCO_SERVICES; DOCO_SERVICES=("${REPLY[@]}"); readonly DOCO_SERVICES
-	"${@:2}"
+	__apply-targets = "${REPLY[@]}" -- "${@:2}"
 }
 
+without-targets() { __apply-targets '' -- "$@"; }
+
+__apply-targets() {
+	local HAVE_SERVICES=$1 DOCO_SERVICES DOCO_COMMAND
+	DOCO_SERVICES=(); shift
+	while (($#)) && [[ $1 != -- ]]; do DOCO_SERVICES+=("$1"); shift; done
+	readonly DOCO_SERVICES
+	"${@:2}"
+}
 ```
 
 ### Target Set Operations
@@ -120,7 +135,7 @@ The `all-targets` and `any-target` functions return a `REPLY` array consisting o
 all-targets() {
 	local services=()
 	while (($#)); do
-		target "$1" get || [[ $1 == @current ]] ||
+		target "$1" get exists || [[ $1 == @current ]] ||
 			fail "'$1' is not a known group or service" || return
 		for REPLY in "${REPLY[@]}"; do
 			[[ " ${services[*]-} " == *" $REPLY "* ]] || services+=("$REPLY")
@@ -133,7 +148,7 @@ all-targets() {
 # set REPLY to contents of the first existing target
 any-target() {
 	for REPLY; do
-		if target "$REPLY" get; then return ; fi
+		if target "$REPLY" get exists; then return ; fi
 	done
 	REPLY=(); false
 }

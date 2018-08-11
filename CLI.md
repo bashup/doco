@@ -98,7 +98,9 @@ If a name passed to doco on the command line isn't recognized as an option, it's
 
 ```shell
 doco-other() {
-	if fn-exists "doco.$1"; then "doco.$@"
+	if fn-exists "doco.$1"; then
+		local DOCO_COMMAND=${DOCO_COMMAND:-$1}
+		"doco.$@"
 	elif is-target-name "$1" && target "$1" exists; then
 		with-targets @current "$1" -- doco "${@:2}"
 	else fail "'$1' is not a recognized option, command, service, or group"
@@ -179,7 +181,8 @@ This is the command-line equivalent of calling `require-services` *flag subcomma
 ```shell
 function doco.--require-services=() {
     [[ ${1:0:1} == [-+1.] ]] || loco_error "--require-services argument must begin with ., -, +, or 1"
-    mdsh-splitwords "$1" && require-services "${REPLY[@]}" "${2-}" && doco "${@:2}";
+    mdsh-splitwords "$1"; ((${#REPLY[@]}>1)) || REPLY+=("${DOCO_COMMAND:-${2-}}")
+    require-services "${REPLY[@]:0:2}" && doco "${@:2}"
 }
 ```
 
@@ -190,7 +193,10 @@ function doco.--require-services=() {
 Shorthand for `--with-default cmd-default --require-services` *flag subcommand...*.  That is, if the current service set is empty, it defaults to the `cmd-default` target, if defined.  The number of services is then verified with `--require-services` before executing *subcommand*.  This makes it easy to define new subcommands that work on a default container or group of containers.  (For example, the `doco sh` command is defined as `doco cmd 1 exec bash "$@"` -- i.e., it runs on exactly one service, defaulting to the `cmd-default` group.)
 
 ```shell
-doco.cmd() { doco --with-default cmd-default --require-services "$@"; }
+doco.cmd() {
+	[[ ${DOCO_COMMAND-} != cmd ]] || local DOCO_COMMAND=$2
+	doco --with-default cmd-default --require-services "$@"
+}
 ```
 
 #### `cp` *[opts] src dest*
@@ -204,23 +210,21 @@ doco.cp() {
         case "$1" in
         -a|--archive|-L|--follow-link) opts+=("$1") ;;
         --help|-h) docker help cp || true; return ;;
-        -*) loco_error "Unrecognized option $1; see 'docker help cp'" ;;
+        -*) fail "Unrecognized option $1; see 'docker help cp'" || return ;;
         *) break ;;
         esac
         shift
     done
-    (($# == 2)) || loco_error "cp requires two non-option arguments (src and dest)"
+    (($# == 2)) || fail "cp requires two non-option arguments (src and dest)" || return
     while (($#)); do
         if [[ $1 == *:* ]]; then
-            [[ ! "$seen" ]] || loco_error "cp: only one argument may contain a :"
+            [[ ! "$seen" ]] || fail "cp: only one argument may contain a :" || return
             seen=yes
             if [[ "${1%%:*}" ]]; then
                 project-name "${1%%:*}"; set -- "$REPLY:${1#*:}" "${@:2}"
-            elif have-services '==1'; then
-                project-name "${DOCO_SERVICES[0]}"; set -- "$REPLY$1" "${@:2}"
             else
-                doco --with-default=shell-default --require-services=1 cp "${opts[@]}" "$@"
-                return
+                require-services 1 cp @current shell-default || return
+                project-name "$REPLY"; set -- "$REPLY$1" "${@:2}"
             fi
         elif [[ $1 != /* && $1 != - ]]; then
             # make paths relative to original run directory
@@ -228,7 +232,7 @@ doco.cp() {
         fi
         opts+=("$1"); shift
     done
-    [[ "$seen" ]] || loco_error "cp: either source or destination must contain a :"
+    [[ "$seen" ]] || fail "cp: either source or destination must contain a :" || return
     docker cp ${opts[@]+"${opts[@]}"}
 }
 ```

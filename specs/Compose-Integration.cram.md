@@ -60,7 +60,7 @@ Inserting the service argument at the appropriate place requires parsing the com
     [64]
 
     $ doco -- exec bash -c 'blah'    # bash is not a service, so this fails
-    No service/group specified for exec
+    no services specified for exec
     [64]
 
     $ doco -- exec foo bash          # foo *is* a service, so this succeeds

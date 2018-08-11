@@ -83,13 +83,13 @@ In addition to the generic `create-service` and `create-group` events, there are
 Targets expand to an array of service names.  A service is a target that expands to exactly one service name: itself.  Groups, on the other hand, can expand to zero or more service names.  (And undeclared targets don't expand.)  You can fetch the names into the `REPLY` array using `get`, and check the count using `has-count`.
 
 ~~~shell
-    $ target "aService" get && echo "${#REPLY[@]} items:" "${REPLY[@]}"
+    $ target "aService" get exists && echo "${#REPLY[@]} items:" "${REPLY[@]}"
     1 items: aService
 
-    $ target "aGroup" get && echo "${#REPLY[@]} items"
+    $ target "aGroup" get exists && echo "${#REPLY[@]} items"
     0 items
 
-    $ target "nosuch" get || echo "nonexistent"
+    $ target "nosuch" exists || echo "nonexistent"
     nonexistent
 
 # has-count returns the truth value of the number of items
@@ -126,11 +126,11 @@ You can add targets to groups or non-existent targets (making them into a group)
     $ target "aGroup" add "aService"
     group changed: aGroup aService
 
-    $ target "aGroup" get && echo "${#REPLY[@]} items:" "${REPLY[@]}"
+    $ target "aGroup" get exists && echo "${#REPLY[@]} items:" "${REPLY[@]}"
     1 items: aService
 
     $ target "aGroup" add "aService"   # second add does nothing
-    $ target "aGroup" get && echo "${#REPLY[@]} items:" "${REPLY[@]}"
+    $ target "aGroup" get exists && echo "${#REPLY[@]} items:" "${REPLY[@]}"
     1 items: aService
 
     $ target "svc2" declare-service
@@ -140,7 +140,7 @@ You can add targets to groups or non-existent targets (making them into a group)
     created group: nosuch
     group changed: nosuch svc2 aService
 
-    $ target "nosuch" get && echo "${#REPLY[@]} items:" "${REPLY[@]}"
+    $ target "nosuch" get exists && echo "${#REPLY[@]} items:" "${REPLY[@]}"
     2 items: svc2 aService
 
     $ target "aGroup" add "nosuch"
@@ -155,7 +155,7 @@ Groups can be `set` to a list of targets (i.e., existing services or groups), dr
     $ target "nosuch" set
     group changed: nosuch
 
-    $ target "nosuch" get && echo "${#REPLY[@]} items:" "${REPLY[@]}"
+    $ target "nosuch" get exists && echo "${#REPLY[@]} items:" "${REPLY[@]}"
     0 items:
 
     $ target "nosuch" set aService svc2
@@ -210,13 +210,19 @@ A special target `@current` is used to access a special read-only group whose co
 
 ~~~
 
-The current target can be set for the duration of one command/function call using `with-targets` *targets...* `--` *command...*, during which the `DOCO_SERVICES` variable will be read-only, but still changeable using `with-targets`.  You can include `@current` in the target list, to merge the other targets with the current target set:
+#### `with-targets`
+
+The current target can be set for the duration of one command/function call using `with-targets` *targets...* `--` *command...*, during which the `DOCO_SERVICES` variable will be read-only, but still changeable using `with-targets`.  You can include `@current` in the target list, to merge the other targets with the current target set.
+
+The value of `DOCO_COMMAND` is reset to empty during the execution of *command*.
 
 ~~~shell
 # with-targets expands groups, and issues change events for @current
 
-    $ with-targets "nosuch" -- declare -p DOCO_SERVICES
+    $ DOCO_COMMAND=foo
+    $ with-targets "nosuch" -- declare -p DOCO_SERVICES DOCO_COMMAND
     declare -ar DOCO_SERVICES=([0]="aService" [1]="svc2")
+    declare -- DOCO_COMMAND
 
     $ declare -p DOCO_SERVICES   # back to not existing
     *: declare: DOCO_SERVICES: not found (glob)
@@ -238,6 +244,38 @@ The current target can be set for the duration of one command/function call usin
     [1]
 
 ~~~
+
+#### `without-targets` *command...*
+
+Run *command* with a non-existent  `@current` target.
+
+~~~shell
+    $ target @current exists || echo nonexistent
+    nonexistent
+
+    $ with-targets -- target @current exists && echo exists # empty @current DOES exist
+    exists
+
+    $ without-targets target @current exists || echo nonexistent
+    nonexistent
+~~~
+
+#### `target` *target* `foreach` *command...*
+
+Run *command* zero or more times, once for each service in *target*, with the current target set to the corresponding service.
+
+~~~shell
+    $ target @current foreach declare -p DOCO_SERVICES   # no entries; doesn't run
+
+    $ target aService foreach declare -p DOCO_SERVICES
+    declare -ar DOCO_SERVICES=([0]="aService")
+
+    $ target "nosuch" foreach declare -p DOCO_SERVICES
+    declare -ar DOCO_SERVICES=([0]="aService")
+    declare -ar DOCO_SERVICES=([0]="svc2")
+~~~
+
+
 
 ### Finding and Merging Targets
 

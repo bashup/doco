@@ -55,16 +55,64 @@ Returns the project name or container name of the specified service in `REPLY`. 
 
 #### `require-services` *flag command-name*
 
-Checks the number of currently selected services, based on *flag*.  If flag is `1`, then exactly one service must be selected; if `-`, then 0 or 1 services.  `+` means 1 or more services are required.  A flag of `.` is a no-op; i.e. all counts are acceptable. If the number of services selected (e.g. via the `--with` subcommand), does not match the requirement, abort with a usage error using *command-name*.
+Checks the number of services in the first existing *target*, based on *flag*.  (If no *targets* are given, the `@current` service set is checked.)  On return, `${REPLY[@]}` contains the list of services retrieved from the first existing *target*.
+
+If *flag* is `1`, then the list must contain exactly one service; if `-`, then 0 or 1 services are acceptable.  `+` means 1 or more services are required.  A *flag* of `.` is a no-op; i.e. any service count is acceptable.
+
+If the number of services in the first existing *target* does not match the requirement, failure is returned, with a usage error using *command-name*.  (If no *command-name* is given, the current `DOCO_COMMAND` is used, or failing that, the words "the current command".)
 
 ~~~shell
-# Test harness:
-    $ SERVICES x y
-    $ doco.test-rs() { require-services "$1" test-rs || return; echo success; }
+# First argument is validated
+
+    $ require-services
+    require-services first argument must be ., -, +, or 1
+    [64]
+
+    $ require-services x
+    require-services first argument must be ., -, +, or 1
+    [64]
+
+# Check current set, default command name, require at least one service
+
+    $ require-services +
+    no services specified for the current command
+    [64]
+
+# Empty list returned, since @current was empty
+
+    $ declare -p REPLY
+    declare -a REPLY=()
+
+# Multiple targets given, require at most one service
+
+    $ with-targets x y -- require-services - SomeCommand
+    SomeCommand cannot be used on multiple services
+    [64]
+
+# The targets are in REPLY
+
+    $ declare -p REPLY
+    declare -a REPLY=([0]="x" [1]="y")
+
+# Explicit requirements: first existing group or target is checked and returned
+
+    $ GROUP empty :=
+    $ GROUP xy := x y
+
+    $ require-services . test not-real empty xy && declare -p REPLY
+    declare -a REPLY=()
+
+    $ require-services . test not-real also-not-real xy empty && declare -p REPLY
+    declare -a REPLY=([0]="x" [1]="y")
+
+# Test harness for exhaustive condition checking
+
+    $ doco.test-rs() { require-services "$1" || return; echo success; }
     $ test-rs() { (doco -- "${@:2}" test-rs "$1") || echo "[$?]"; }
     $ test-rs-all() { test-rs $1; test-rs $1 x y; test-rs $1 foo; }
 
 # 1 = exactly one service
+
     $ test-rs-all 1
     no services specified for test-rs
     [64]
@@ -73,6 +121,7 @@ Checks the number of currently selected services, based on *flag*.  If flag is `
     success
 
 # - = at most one service
+
     $ test-rs-all -
     success
     test-rs cannot be used on multiple services
@@ -80,6 +129,7 @@ Checks the number of currently selected services, based on *flag*.  If flag is `
     success
 
 # + = at least one service
+
     $ test-rs-all +
     no services specified for test-rs
     [64]
@@ -87,6 +137,7 @@ Checks the number of currently selected services, based on *flag*.  If flag is `
     success
 
 # . = any number of services
+
     $ test-rs-all .
     success
     success

@@ -14,11 +14,7 @@ The services API depends on the [Targets API](Targets.md) and [bashup/events](ht
 Invoke *cmd args...* once for each service in the current service set; the service set will contain exactly one service during each invocation.  Does nothing if the current service set is empty.
 
 ```shell
-foreach-service() {
-    for REPLY in ${DOCO_SERVICES[@]+"${DOCO_SERVICES[@]}"}; do
-        with-targets "$REPLY" -- "$@"
-    done
-}
+foreach-service() { target @current foreach "$@"; }
 ```
 
 #### `have-services` *[compexpr]*
@@ -44,18 +40,26 @@ project-name() {
 }
 ```
 
-#### `require-services` *flag command-name*
+#### `require-services` *flag command-name [targets...]*
 
-Checks the number of currently selected services, based on *flag*.  If flag is `1`, then exactly one service must be selected; if `-`, then 0 or 1 services.  `+` means 1 or more services are required.  A flag of `.` is a no-op; i.e. all counts are acceptable. If the number of services selected (e.g. via the `--with` subcommand), does not match the requirement, abort with a usage error using *command-name*.
+Checks the number of services in the first existing *target*, based on *flag*.  (If no *targets* are given, the `@current` service set is checked.)  On return, `${REPLY[@]}` contains the list of services retrieved from the first existing *target*.
+
+If *flag* is `1`, then the list must contain exactly one service; if `-`, then 0 or 1 services are acceptable.  `+` means 1 or more services are required.  A *flag* of `.` is a no-op; i.e. any service count is acceptable.
+
+If the number of services in the first existing *target* does not match the requirement, failure is returned, with a usage error using *command-name*.  (If no *command-name* is given, the current `DOCO_COMMAND` is used, or failing that, the words "the current command".)
 
 ```shell
 require-services() {
-    local REPLY=("${DOCO_SERVICES[@]}")
-    case "$1${#REPLY[@]}" in
-    ?1|-0|.*) return ;;  # 1 is always acceptable
-    ?0)    fail "no services specified for $2" ;;
-    [-1]*) fail "$2 cannot be used on multiple services" ;;
-    esac
+	[[ ${1-} == [-+1.] ]] ||
+		fail "require-services first argument must be ., -, +, or 1" || return
+	(($#>1)) || set -- "$1" "${DOCO_COMMAND:-the current command}"
+	(($#>2)) || set -- "$1" "$2" @current
+	any-target "${@:3}" || true
+	case "$1${#REPLY[@]}" in
+		?1|-0|.*) return ;;  # 1 is always acceptable
+		?0)    fail "no services specified for $2" ;;
+		[-1]*) fail "$2 cannot be used on multiple services" ;;
+	esac
 }
 ```
 
@@ -128,7 +132,7 @@ generate-jq-func() {
 ```shell
 ALIAS() { mdsh-splitwords "$1"; GROUP "${REPLY[@]}" += "${@:2}"; }
 alias-exists() { target "$1" exists; }
-get-alias() { target "$1" get || true; }
+get-alias() { target "$1" get; }
 set-alias() { target "$1" set "$@"; }
 with-alias() { target "$1" call "${@:2}"; }
 with-service() { mdsh-splitwords "$1"; with-targets @current "${REPLY[@]}" -- "${@:2}"; }

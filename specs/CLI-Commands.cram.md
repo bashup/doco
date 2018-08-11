@@ -115,12 +115,12 @@ Any functions defined via jqmd's facilities  (`DEFINES`, `IMPORTS`, `jq defs` bl
 
 ~~~shell
     $ doco sh
-    no services specified for exec
+    no services specified for sh
     [64]
 
     $ GROUP tango := alfa foxtrot
     $ doco tango sh
-    exec cannot be used on multiple services
+    sh cannot be used on multiple services
     [64]
 
     $ doco alfa sh
