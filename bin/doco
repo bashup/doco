@@ -471,12 +471,13 @@ check_multi() {
 }
 GROUP() {
     (($#>1)) || loco_error "GROUP requires at least two arguments"
-    local op groups=(); while (($#)) && [[ $1 != [+:]= ]]; do groups+=("$1"); shift; done
+    local op groups=(); while (($#)) && [[ $1 != [+:/]= ]]; do groups+=("$1"); shift; done
     for svc in "${@:2}"; do target "$svc" exists || target "$svc" declare-service || return; done
     case "${1-}" in
         +=) op='add' ;;
         :=) op='set' ;;
-        *) fail "GROUP needs += or :=" || return
+        /=) op='set-default' ;;
+        *) fail "GROUP needs an operator: +=, :=, or /=" || return
     esac
     [[ ${groups[*]-} ]] || fail "No groups given" || return
     for REPLY in "${groups[@]}"; do target "$REPLY" "$op" "${@:2}"; done
@@ -577,7 +578,7 @@ doco-target::declare-service() {
 			fail "$TARGET_NAME: services must be created before project spec is finalized" ||
 			return
 		fi
-		TARGET=("$TARGET_NAME"); event emit "create-service" "$TARGET_NAME" "$TARGET_NAME"
+		this __create service "$TARGET_NAME"
 		this readonly "$@"
 	elif ! this is-service; then
 		fail "$TARGET_NAME is a group, but a service was expected"
@@ -586,11 +587,17 @@ doco-target::declare-service() {
 
 doco-target::declare-group() {
 	if ! this exists; then
-		TARGET=(); event emit "create-group" "$TARGET_NAME"
+		this __create group
 		this "$@"
 	elif this is-service; then
 		fail "$TARGET_NAME is a service, but a group was expected"
 	fi
+}
+
+doco-target::__create() {
+	TARGET=("${@:2}")
+	event emit    "create $1" "$TARGET_NAME"
+	event resolve "created $1 $TARGET_NAME" "$TARGET_NAME"
 }
 
 doco-target::get() { REPLY=("${TARGET[@]}"); this "${1-exists}" "${@:2}"; }
@@ -604,9 +611,11 @@ doco-target::set() {
 	all-targets "$@" || return
 	TARGET=("${REPLY[@]}")
 	if [[ ${TARGET[*]-} != "$TARGET_OLD" ]]; then
-		event emit "change-group" "$TARGET_NAME" "${TARGET[@]}"
+		event emit "change group" "$TARGET_NAME" "${TARGET[@]}"
 	fi
 }
+
+doco-target::set-default() { this exists || this set "$@"; }
 
 @current-target::set() { fail "@current group is read-only"; }
 @current-target::declare-service() { fail "@current is a group, but a service was expected"; }
@@ -673,17 +682,23 @@ services-matching() {
 }
 mdsh_raw_jq_api+=($'def services: if .services // .version then .services else . end;\n')
 mdsh_raw_jq_api+=($'def services_matching(f): services // {} | to_entries | .[] | select( .value | f ) ;\n')
-event on "change-group"   @1 event on "finalize_project" generate-jq-func
-event on "create-service" @1 event on "finalize_project" generate-jq-func
+event on "create service" @1 event on "RUN_JQ" generate-jq-func
+event on "create group"   @1 event on "RUN_JQ" generate-jq-func
+
+RUN_JQ() {
+	local jqmd_defines=${jqmd_defines-}
+	event emit "RUN_JQ"  # allow on-the-fly defines
+	JQ_CMD "$@" && "${REPLY[@]}"
+}
 
 generate-jq-func() {
     if [[ $1 != "@current" ]]; then
         target "$1" get; set -- "$1" "${REPLY[@]}"
-        local t; printf -v t '| (.services."%s" |= f ) ' "${@:2}"
+        local t=; (($#<2)) || { printf -v t '| (.services."%s" |= f ) ' "${@:2}"; t=${t:2}; }
         # jq function names can only have '_' or '::', not '-' or '.'
         set -- "${1//-/::dash::}"; set -- "${1//./::dot::}"; set -- "${1/#::/_::}"
         set -- "${1//::::/::}"
-        DEFINE "def $1(f): ${t:2};"
+        DEFINE "def $1(f): ${t:-.};"
     fi
 }
 ALIAS() { mdsh-splitwords "$1"; GROUP "${REPLY[@}}" += "$@"; }

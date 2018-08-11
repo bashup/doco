@@ -44,7 +44,7 @@ doco-target::declare-service() {
 			fail "$TARGET_NAME: services must be created before project spec is finalized" ||
 			return
 		fi
-		TARGET=("$TARGET_NAME"); event emit "create-service" "$TARGET_NAME" "$TARGET_NAME"
+		this __create service "$TARGET_NAME"
 		this readonly "$@"
 	elif ! this is-service; then
 		fail "$TARGET_NAME is a group, but a service was expected"
@@ -53,11 +53,17 @@ doco-target::declare-service() {
 
 doco-target::declare-group() {
 	if ! this exists; then
-		TARGET=(); event emit "create-group" "$TARGET_NAME"
+		this __create group
 		this "$@"
 	elif this is-service; then
 		fail "$TARGET_NAME is a service, but a group was expected"
 	fi
+}
+
+doco-target::__create() {
+	TARGET=("${@:2}")
+	event emit    "create $1" "$TARGET_NAME"
+	event resolve "created $1 $TARGET_NAME" "$TARGET_NAME"
 }
 
 ```
@@ -76,9 +82,11 @@ doco-target::set() {
 	all-targets "$@" || return
 	TARGET=("${REPLY[@]}")
 	if [[ ${TARGET[*]-} != "$TARGET_OLD" ]]; then
-		event emit "change-group" "$TARGET_NAME" "${TARGET[@]}"
+		event emit "change group" "$TARGET_NAME" "${TARGET[@]}"
 	fi
 }
+
+doco-target::set-default() { this exists || this set "$@"; }
 
 ```
 

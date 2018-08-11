@@ -33,14 +33,14 @@ Until a target name is made into a service or a group, it is considered neither,
     not a service either
 ~~~
 
-A target's type is set using `declare-service` or `declare-group`.  When the target is initialized, an event is emitted.  Subsequent declarations have no effect, other than to verify that the target is of that type.
+A target's type is set using `declare-service` or `declare-group`.  When the target is initialized, an event is emitted.  (Services actually get two events; one generic, one specific to the service name.)  Subsequent declarations have no effect, other than to verify that the target is of that type.
 
 ~~~shell
-    $ event on create-service @_ echo "created service:"
-    $ event on create-group @_ echo "created group:"
+    $ event on "create service" @_ echo "created service:"
+    $ event on "create group"   @_ echo "created group:"
 
     $ target "aService" declare-service
-    created service: aService aService
+    created service: aService
 
     $ target "aGroup" declare-group
     created group: aGroup
@@ -60,6 +60,22 @@ A target's type is set using `declare-service` or `declare-group`.  When the tar
     $ target "aGroup" declare-service
     aGroup is a group, but a service was expected
     [64]
+~~~
+
+#### Async Events
+
+In addition to the generic `create-service` and `create-group` events, there are also service and group-specific events that are asynchronous.  Registering for `created-service X` or `created-group Y` will invoke the callback immediately if the named service or group already exists.  Otherwise, the callback will be invoked later, if and when the service or group is actually defined.
+
+~~~shell
+# "created" events are async: they fire even after the creation took place
+
+    $ event on "created service aService" @_ echo "Specifically created aService w/arg"
+    Specifically created aService w/arg aService
+
+    $ event on "created group aGroup" @_ echo "Specifically created aGroup w/arg"
+    Specifically created aGroup w/arg aGroup
+
+
 ~~~
 
 ### Target Contents
@@ -97,7 +113,7 @@ Targets expand to an array of service names.  A service is a target that expands
 You can add targets to groups or non-existent targets (making them into a group), but the added targets have to exist first.  Events are issued for group changes, and a given service can only exist once within a given group.  Groups can be added to other groups, but the result still contains only services:
 
 ~~~shell
-    $ event on "change-group" @_ echo "group changed:"
+    $ event on "change group" @_ echo "group changed:"
 
     $ target "aService" add "nosuch"
     aService is a service, but a group was expected
@@ -118,7 +134,7 @@ You can add targets to groups or non-existent targets (making them into a group)
     1 items: aService
 
     $ target "svc2" declare-service
-    created service: svc2 svc2
+    created service: svc2
 
     $ target "nosuch" add svc2 aService   # nosuch is now a group
     created group: nosuch
@@ -146,6 +162,20 @@ Groups can be `set` to a list of targets (i.e., existing services or groups), dr
     group changed: nosuch aService svc2
 
     $ target "nosuch" set aService svc2   # no change = no event
+~~~
+
+#### Setting Default Contents
+
+The `set-default` method works like `set`, except that it only works on non-existent groups
+
+~~~shell
+    $ target "nosuch" set-default svc2   # no change, no event
+
+    $ target "not-yet" set-default svc2
+    created group: not-yet
+    group changed: not-yet svc2
+
+    $ target "not-yet" set-default aService  # no change, no event
 ~~~
 
 #### Read-only Targets

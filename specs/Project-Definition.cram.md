@@ -12,9 +12,13 @@
 
 #### `GROUP` *name(s) operator target(s)...*
 
-Add *targets* to the named group(s), defining or redefining jq functions to map those groups to the targeted services.  The *targets* may be services or groups; if a target name isn't recognized it's assumed to be a service and defined as such.  The *operator* is either `:=` or `+=` -- if `+=`, the targets are are added to any existing contents of the groups.  If `:=`, the groups' existing contents are erased and replaced with *targets*.
+Add *targets* to the named group(s), defining or redefining jq functions to map those groups to the targeted services.  The *targets* may be services or groups; if a target name isn't recognized it's assumed to be a service and defined as such.  The *operator* can be any of the following:
 
-(Note that this function *adds* to the existing group(s) and recursively expands groups in the target list.  If you want to set an exact list of services, use `target "groupname" set ...` instead.  Also note that the "recursive" expansion is *immediate*: redefining a group used in the target list will *not* update the definition of the referencing group.)
+* `+=` adds *targets* to the named groups,
+* `:=` clears the the named groups before adding the *targets*, and
+* `/=` only adds the targets to groups that don't already exist.
+
+Note that this function recursively expands groups in the target list, but this expansion is *immediate*: redefining a group used in the target list will *not* update the definition of the referencing group.
 
 ```shell
 # Arguments required
@@ -23,25 +27,33 @@ Add *targets* to the named group(s), defining or redefining jq functions to map 
     GROUP requires at least two arguments
     [64]
 
-# Define one group, non-existing name
+# Define default for group, non-existing name
 
-    $ GROUP delta-xray += echo gamma-zulu
+    $ GROUP delta-xray /= echo gamma-zulu
     $ doco delta-xray ps
     docker-compose ps echo gamma-zulu
-    $ event fire "finalize_project"; RUN_JQ -c -n '{} | delta::dash::xray(.image = "test")'
+
+    $ GROUP delta-xray /= echo   # group is defined, so won't change now
+    $ doco delta-xray ps
+    docker-compose ps echo gamma-zulu
+
+    $ RUN_JQ -c -n '{} | delta::dash::xray(.image = "test")'
     {"services":{"echo":{"image":"test"},"gamma-zulu":{"image":"test"}}}
 
 # Add to multiple groups, adding but not duplicating
 
     $ GROUP tango delta-xray += niner gamma-zulu
+
     $ doco delta-xray ps
     docker-compose ps echo gamma-zulu niner
-    $ event fire "finalize_project"; RUN_JQ -c -n '{} | delta::dash::xray(.image = "test")'
-    {"services":{"echo":{"image":"test"},"gamma-zulu":{"image":"test"},"niner":{"image":"test"}}}
 
     $ doco tango ps
     docker-compose ps niner gamma-zulu
-    $ event fire "finalize_project"; RUN_JQ -c -n '{} | tango(.image = "test")'
+
+    $ RUN_JQ -c -n '{} | delta::dash::xray(.image = "test")'
+    {"services":{"echo":{"image":"test"},"gamma-zulu":{"image":"test"},"niner":{"image":"test"}}}
+
+    $ RUN_JQ -c -n '{} | tango(.image = "test")'
     {"services":{"niner":{"image":"test"},"gamma-zulu":{"image":"test"}}}
 
 # "Recursive" group expansion
@@ -57,9 +69,16 @@ Add *targets* to the named group(s), defining or redefining jq functions to map 
     baz
     $ GROUP fiz := bar; target fiz get; printf '%q\n' "${REPLY[@]}"
     bar
+
+# Empty group jq function:
+
+    $ GROUP empty-thing :=
+    $ RUN_JQ -c -n '{} | empty::dash::thing(.image="foo")'
+    {}
+
 ```
 
-Note: services can't be declared once the docker-compose project definition has been finalized, so any targets passed to `GROUP` after the project definition is finalized must be *existing* services or groups.  Otherwise an error will occur:
+Also note: services can't be declared once the docker-compose project definition has been finalized, so any targets passed to `GROUP` after the project definition is finalized must be *existing* services or groups.  Otherwise an error will occur:
 
 ~~~shell
     $ GROUP fiz := something-new
@@ -82,7 +101,7 @@ Note: services can't be declared once the docker-compose project definition has 
     docker-compose ps alfa
 
 # jq function makes modifications to the service entry
-    $ event fire "finalize_project"; RUN_JQ -c -n '{} | foxtrot(.image = "test")'
+    $ RUN_JQ -c -n '{} | foxtrot(.image = "test")'
     {"services":{"foxtrot":{"image":"test"}}}
 
 # Can't declare new service after init:

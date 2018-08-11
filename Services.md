@@ -97,22 +97,28 @@ def services_matching(f): services // {} | to_entries | .[] | select( .value | f
 
 #### Generated Service Functions
 
-doco automatically defines jq functions for all services and groups declared explicitly via `SERVICES` or `GROUP`.  These functions take one argument (an expression) and apply it to the service or services specified.  As a group's members change, the functions are updated.  When jq is finally run, the initial definition of the functions will match the final contents of the groups.
+doco automatically defines jq functions for all services and groups declared explicitly via `SERVICES` or `GROUP`.  These functions take one argument (an expression) and apply it to the service or services specified.  These functions are defined on the fly whenever jq is run, so that the initial definition of the functions will match the contents of the groups as of the time RUN_JQ is called (e.g. at project finalization).
 
 Because jq has a more limited character set than the allowable names for docker containers, function names are translated to have `::dot::` in place of `.`, and `::dash::` in place of `-`.  If a service or group name *begins* with a `-` or `.`, it's preceded by an `_`, e.g. a jq function for the group named `.foo` would be called `_::dot::foo`.
 
 ```shell
-event on "change-group"   @1 event on "finalize_project" generate-jq-func
-event on "create-service" @1 event on "finalize_project" generate-jq-func
+event on "create service" @1 event on "RUN_JQ" generate-jq-func
+event on "create group"   @1 event on "RUN_JQ" generate-jq-func
+
+RUN_JQ() {
+	local jqmd_defines=${jqmd_defines-}
+	event emit "RUN_JQ"  # allow on-the-fly defines
+	JQ_CMD "$@" && "${REPLY[@]}"
+}
 
 generate-jq-func() {
     if [[ $1 != "@current" ]]; then
         target "$1" get; set -- "$1" "${REPLY[@]}"
-        local t; printf -v t '| (.services."%s" |= f ) ' "${@:2}"
+        local t=; (($#<2)) || { printf -v t '| (.services."%s" |= f ) ' "${@:2}"; t=${t:2}; }
         # jq function names can only have '_' or '::', not '-' or '.'
         set -- "${1//-/::dash::}"; set -- "${1//./::dot::}"; set -- "${1/#::/_::}"
         set -- "${1//::::/::}"
-        DEFINE "def $1(f): ${t:2};"
+        DEFINE "def $1(f): ${t:-.};"
     fi
 }
 ```
