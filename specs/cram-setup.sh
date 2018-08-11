@@ -13,3 +13,12 @@ echo '{"version": "2.1", "services": {"example1":{}}}' >docker-compose.yml
 
 # Initialize doco in-process when run without other initialization
 doco() { unset -f doco; loco_main "$@"; }
+
+# command to dump variables
+doco.declare() { declare -p "$@"; }
+
+# Run uninitialized doco in a subprocess, with -e re-enabled
+run-doco() (
+	set -e
+	doco "$@"
+)
