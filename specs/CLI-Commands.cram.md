@@ -11,13 +11,13 @@
 If no arguments are given, `doco` outputs the current target service list, one item per line, and returns success.  If there is no current target, however, a usage message is output:
 
 ~~~shell
-    $ (doco example1)  # explicit services/groups, map to output names
+    $ doco example1  # explicit services/groups, map to output names
     example1
 
-    $ (doco --all)  # output current target set
+    $ doco --all  # output current target set
     example1
 
-    $ (doco --)  # empty target set; outputs nothing
+    $ doco --  # empty target set; outputs nothing
 
     $ (command doco)   # no set defined = usage + error
     Usage: doco command args...
@@ -29,7 +29,7 @@ If no arguments are given, `doco` outputs the current target service list, one i
 Shorthand for `--with-default cmd-default --require-services` *flag subcommand...*.  That is, if the current service set is empty, it defaults to the `cmd-default` target, if defined.  The number of services is then verified with `--require-services` before executing *subcommand*.  This makes it easy to define new subcommands that work on a default container or group of containers.  (For example, the `doco sh` command is defined as `doco cmd 1 exec bash "$@"` -- i.e., it runs on exactly one service, defaulting to the `cmd-default` group.)
 
 ~~~shell
-    $ (doco cmd 1 test)
+    $ doco cmd 1 test
     no services specified for test
     [64]
 
@@ -53,35 +53,35 @@ Copy a file in or out of a service container.  Functions the same as `docker cp`
     $ doco cp bar:/spam -
     docker cp clicommandscrammd_bar_1:/spam -
 
-    $ (doco cp :x y)
+    $ doco cp :x y
     no services specified for cp
     [64]
 
-    $ (GROUP shell-default := bravo; doco cp :x y)
+    $ GROUP shell-default := bravo; doco cp :x y
     docker cp clicommandscrammd_bravo_1:x /*/CLI-Commands.cram.md/y (glob)
 
-    $ (GROUP shell-default := bravo; LOCO_PWD=$PWD/t doco bravo cp y :x)
+    $ GROUP shell-default := bravo; LOCO_PWD=$PWD/t doco bravo cp y :x
     docker cp /*/CLI-Commands.cram.md/t/y clicommandscrammd_bravo_1:x (glob)
 
 # Bad usages
 
-    $ (SERVICES a b; doco a b cp foo :bar)
+    $ doco a b cp foo :bar
     cp cannot be used on multiple services
     [64]
 
-    $ (doco cp --nosuch)
+    $ doco cp --nosuch
     Unrecognized option --nosuch; see 'docker help cp'
     [64]
 
-    $ (doco cp foo bar baz)
+    $ doco cp foo bar baz
     cp requires two non-option arguments (src and dest)
     [64]
 
-    $ (doco cp foo bar)
+    $ doco cp foo bar
     cp: either source or destination must contain a :
     [64]
 
-    $ (doco cp foo:bar baz:spam)
+    $ doco cp foo:bar baz:spam
     cp: only one argument may contain a :
     [64]
 ~~~
@@ -114,18 +114,18 @@ Any functions defined via jqmd's facilities  (`DEFINES`, `IMPORTS`, `jq defs` bl
 `doco sh` *args...* executes `bash` *args* in the specified service's container.  If no service is specified, it defaults to the `cmd-default` target.  Multiple services are not allowed, unless you preface `sh` with `foreach`.
 
 ~~~shell
-    $ (doco sh)
+    $ doco sh
     no services specified for exec
     [64]
 
     $ GROUP tango := alfa foxtrot
-    $ (doco tango sh)
+    $ doco tango sh
     exec cannot be used on multiple services
     [64]
 
     $ doco alfa sh
     docker-compose exec alfa bash
 
-    $ (GROUP cmd-default += foxtrot; doco sh -c 'echo foo')
+    $ GROUP cmd-default += foxtrot; doco sh -c 'echo foo'
     docker-compose exec foxtrot bash -c echo\ foo
 ~~~
