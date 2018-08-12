@@ -150,7 +150,7 @@ compose-targeted() {
 	if compose-defaults "$1"; then
 		# Non-default target; make sure it's not empty
 		quantify-services + "${DOCO_COMMAND:-$1}" "${REPLY[@]}" || return
-    fi
+	fi
 	compose "$@" "${REPLY[@]}"
 }
 ```
