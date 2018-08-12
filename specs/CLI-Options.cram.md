@@ -58,7 +58,7 @@ You don't normally need to use this option, because you can simply run `doco` *t
 
 #### `--with-default=`*target*
 
-Invoke `doco` *subcommand args...*, adding *target* to the current service set if the current set is empty.  Note that  *target* could still be nonexistent or empty, so you may wish to follow this option with `--require-services` to verify the new count.
+Invoke `doco` *subcommand args...*, adding *target* to the current service set if the current set is empty.  Note that *target* could still be nonexistent or empty, so you may wish to follow this option with `--require-services` to verify the new count.
 
 ~~~shell
     $ GROUP tango := alfa foxtrot

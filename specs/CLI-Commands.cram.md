@@ -24,6 +24,16 @@ If no arguments are given, `doco` outputs the current target service list, one i
     [64]
 ~~~
 
+#### Command/Target Lookup
+
+~~~shell
+# Something that's not a command or existing target gets an error:
+
+    $ doco foo2
+    'foo2' is not a recognized option, command, service, or group
+    [64]
+~~~
+
 #### Command Name Tracing
 
 The name of the current command is tracked in `DOCO_COMMAND`; it's set to the name of the first `doco` subcommand run since the most recent setting of targets (other than `--with-default`).  (This allows error messages to know what command the arguments were passed to.)
@@ -62,24 +72,57 @@ The name of the current command is tracked in `DOCO_COMMAND`; it's set to the na
     declare -- DOCO_COMMAND="mycmd"
 ~~~
 
+#### `cmd` *"quantifier[ cmd...]" subcommand...*
 
+Verify the number of services in the current target, after applying defaults if the current service set is undefined.  Defaults are looked up for the current command, any explicitly specified *cmd* words included in `$1`, *subcommand*, and the global default target.  If the verification succeeds, `doco` *subcommand...* is run with an explicit service set matching the first default group found (or with the same service set).
 
-#### `cmd` *flag subcommand...*
-
-Shorthand for `--with-default cmd-default --require-services` *flag subcommand...*.  That is, if the current service set is empty, it defaults to the `cmd-default` target, if defined.  The number of services is then verified with `--require-services` before executing *subcommand*.  This makes it easy to define new subcommands that work on a default container or group of containers.  (For example, the `doco sh` command is defined as `doco cmd 1 exec bash "$@"` -- i.e., it runs on exactly one service, defaulting to the `cmd-default` group.)
+The first argument after `cmd` must begin with a quantifier suitable for use with `quantify-services`, and may optionally include whitespace-separated command names.  If given, these names will be treated as commands whose defaults should be searched.  (The exact lookup order for defaults is `LOCO_COMMAND`, followed by any supplied *cmd* words, followed by *subcommand*, followed by `--default`.)
 
 ~~~shell
+# Must have arg
+
+    $ doco cmd
+    service quantifier must be ., -, +, or 1
+    [64]
+
+# Validate current services
+
+    $ trace any-target doco cmd 1
+    any-target @current --default
+    no services specified for the current command
+    [64]
+
+# Targets are looked up for DOCO_CMD, named commands, and the trailing command
+
+    $ DOCO_COMMAND=X trace any-target doco cmd "1 foo bar" ps
+    any-target @current --X-default --foo-default --bar-default --ps-default --default
+    no services specified for foo
+    [64]
+
+# Subcommand gets picked up if no current command
+
     $ doco cmd 1 test
     no services specified for test
     [64]
 
-    $ (GROUP cmd-default := foxtrot; doco cmd 1 exec testme)
+    $ doco.some-command() { doco cmd 1 "$@"; }
+    $ doco some-command
+    no services specified for some-command
+    [64]
+
+    $ GROUP --some-command-default := foxtrot
+    $ doco some-command exec testme
+    docker-compose exec foxtrot testme
+
+    $ (GROUP --default := foxtrot; trace compose-defaults doco cmd "1 foo" exec testme)
+    compose-defaults foo exec
+    compose-defaults exec
     docker-compose exec foxtrot testme
 ~~~
 
 #### `cp` *[opts] src dest*
 
-Copy a file in or out of a service container.  Functions the same as `docker cp`, except that instead of using a container name as a prefix, you can use either a service name or an empty string (meaning, the currently-selected service).  So, e.g. `doco cp :/foo bar` copies `/foo` from the current service to `bar`, while `doco cp baz spam:/thing` copies `baz` to `/thing` inside the `spam` service's first container.  If no service is selected and no service name is given, the `shell-default` target is tried.
+Copy a file in or out of a service container.  Functions the same as `docker cp`, except that instead of using a container name as a prefix, you can use either a service name or an empty string (meaning, the currently-selected service).  So, e.g. `doco cp :/foo bar` copies `/foo` from the current service to `bar`, while `doco cp baz spam:/thing` copies `baz` to `/thing` inside the `spam` service's first container.  If no service is selected and no service name is given, the `--cp-default`, `--sh-default`, `--exec-default`, and `--default` targets are tried.
 
 ~~~shell
 # Nominal cases
@@ -97,10 +140,14 @@ Copy a file in or out of a service container.  Functions the same as `docker cp`
     no services specified for cp
     [64]
 
-    $ GROUP shell-default := bravo; doco cp :x y
+    $ (GROUP --sh-default := bravo; trace compose-defaults doco cp :x y)
+    compose-defaults cp sh exec
     docker cp clicommandscrammd_bravo_1:x /*/CLI-Commands.cram.md/y (glob)
 
-    $ GROUP shell-default := bravo; LOCO_PWD=$PWD/t doco bravo cp y :x
+    $ (GROUP --exec-default := bravo; doco cp :x y)
+    docker cp clicommandscrammd_bravo_1:x /*/CLI-Commands.cram.md/y (glob)
+
+    $ LOCO_PWD=$PWD/t doco bravo cp y :x
     docker cp /*/CLI-Commands.cram.md/t/y clicommandscrammd_bravo_1:x (glob)
 
 # Bad usages
@@ -151,7 +198,7 @@ Any functions defined via jqmd's facilities  (`DEFINES`, `IMPORTS`, `jq defs` bl
 
 #### `sh`
 
-`doco sh` *args...* executes `bash` *args* in the specified service's container.  If no service is specified, it defaults to the `cmd-default` target.  Multiple services are not allowed, unless you preface `sh` with `foreach`.
+`doco sh` *args...* executes `bash` *args* in the specified service's container.  If no service is specified, it defaults to the `--sh-default` or `--exec-default` targets.  Multiple services are not allowed, unless you preface `sh` with `foreach`.
 
 ~~~shell
     $ doco sh
@@ -166,10 +213,10 @@ Any functions defined via jqmd's facilities  (`DEFINES`, `IMPORTS`, `jq defs` bl
     $ doco alfa sh
     docker-compose exec alfa bash
 
-    $ GROUP cmd-default += foxtrot; doco sh -c 'echo foo'
+    $ GROUP --exec-default := foxtrot; doco sh -c 'echo foo'
     docker-compose exec foxtrot bash -c echo\ foo
 
-    $ GROUP cmd-default := ; doco sh -c 'echo foo'
+    $ GROUP --sh-default := ; doco sh -c 'echo foo'
     no services specified for sh
     [64]
 ~~~

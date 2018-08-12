@@ -15,7 +15,7 @@
   * [`--with-default=`*target*](#--with-defaulttarget)
   * [`--require-services=`*flag [subcommand args...]*](#--require-servicesflag-subcommand-args)
 - [doco subcommands](#doco-subcommands)
-  * [`cmd` *flag subcommand...*](#cmd-flag-subcommand)
+  * [`cmd` *"quantifier[ cmd...]" subcommand...*](#cmd-quantifier-cmd-subcommand)
   * [`cp` *[opts] src dest*](#cp-opts-src-dest)
   * [`foreach` *subcommand...*](#foreach-subcommand)
   * [`jq`](#jq)
@@ -169,7 +169,7 @@ Note that you don't normally need to use this option, because you can simply run
 
 #### `--with-default=`*target*
 
-Invoke `doco` *subcommand args...*, adding *target* to the current service set if the current set is empty.  Note that  *target* could still be nonexistent or empty, so you may wish to follow this option with `--require-services` to verify the new count.
+Invoke `doco` *subcommand args...*, adding *target* to the current service set if the current set is empty.  Note that *target* could still be nonexistent or empty, so you may wish to follow this option with `--require-services` to verify the new count.
 
 ```shell
 function doco.--with-default=() {
@@ -192,20 +192,26 @@ function doco.--require-services=() {
 
 ### doco subcommands
 
-#### `cmd` *flag subcommand...*
+#### `cmd` *"quantifier[ cmd...]" subcommand...*
 
-Shorthand for `--with-default cmd-default --require-services` *flag subcommand...*.  That is, if the current service set is empty, it defaults to the `cmd-default` target, if defined.  The number of services is then verified with `--require-services` before executing *subcommand*.  This makes it easy to define new subcommands that work on a default container or group of containers.  (For example, the `doco sh` command is defined as `doco cmd 1 exec bash "$@"` -- i.e., it runs on exactly one service, defaulting to the `cmd-default` group.)
+Verify the number of services in the current target, after applying defaults if the current service set is undefined.  Defaults are looked up for the current command, any explicitly specified *cmd* words included in `$1`, *subcommand*, and the global default target.  If the verification succeeds, `doco` *subcommand...* is run with an explicit service set matching the first default group found (or with the same service set).
+
+The first argument after `cmd` must begin with a quantifier suitable for use with `quantify-services`, and may optionally include whitespace-separated command names.  If given, these names will be treated as commands whose defaults should be searched.  (The exact lookup order for defaults is `LOCO_COMMAND`, followed by any supplied *cmd* words, followed by *subcommand*, followed by `--default`.)
 
 ```shell
 doco.cmd() {
-	[[ ${DOCO_COMMAND-} != cmd ]] || local DOCO_COMMAND=$2
-	doco --with-default cmd-default --require-services "$@"
+	[[ ${DOCO_COMMAND-} != cmd ]] || local DOCO_COMMAND
+	[[ ${1-} == [-+1.]* ]] || quantify-services "${1-}" || return
+	local cmds; mdsh-splitwords "${1-}" cmds; cmds+=("${@:2:1}")
+	compose-defaults "${cmds[@]:1}" || true
+	quantify-services "${cmds[0]}" "${cmds[1]-}" "${REPLY[@]}" || return
+	with-targets "${REPLY[@]}" -- doco "${@:2}"
 }
 ```
 
 #### `cp` *[opts] src dest*
 
-Copy a file in or out of a service container.  Functions the same as `docker cp`, except that instead of using a container name as a prefix, you can use either a service name or an empty string (meaning, the currently-selected service).  So, e.g. `doco cp :/foo bar` copies `/foo` from the current service to `bar`, while `doco cp baz spam:/thing` copies `baz` to `/thing` inside the `spam` service's first container.  If no service is selected and no service name is given, the `shell-default` target is tried.
+Copy a file in or out of a service container.  Functions the same as `docker cp`, except that instead of using a container name as a prefix, you can use either a service name or an empty string (meaning, the currently-selected service).  So, e.g. `doco cp :/foo bar` copies `/foo` from the current service to `bar`, while `doco cp baz spam:/thing` copies `baz` to `/thing` inside the `spam` service's first container. If no service is selected and no service name is given, the `--cp-default`, `--sh-default`, `--exec-default`, and `--default` targets are tried.
 
 ```shell
 doco.cp() {
@@ -227,7 +233,8 @@ doco.cp() {
             if [[ "${1%%:*}" ]]; then
                 project-name "${1%%:*}"; set -- "$REPLY:${1#*:}" "${@:2}"
             else
-                require-services 1 cp @current shell-default || return
+                compose-defaults cp sh exec || true
+                quantify-services 1 cp "${REPLY[@]}" || return
                 project-name "$REPLY"; set -- "$REPLY$1" "${@:2}"
             fi
         elif [[ $1 != /* && $1 != - ]]; then
@@ -264,6 +271,6 @@ doco.jq() { RUN_JQ "$@" <"$DOCO_CONFIG"; }
 `doco sh` *args...* executes `bash` *args* in the specified service's container.  If no service is specified, it defaults to the `cmd-default` target.  Multiple services are not allowed, unless you preface `sh` with `foreach`.
 
 ```shell
-doco.sh() { doco --with-default cmd-default exec bash "$@"; }
+doco.sh() { doco exec bash "$@"; }
 ```
 

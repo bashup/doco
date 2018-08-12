@@ -920,8 +920,12 @@ function doco.--require-services=() {
     require-services "${REPLY[@]:0:2}" && doco "${@:2}"
 }
 doco.cmd() {
-	[[ ${DOCO_COMMAND-} != cmd ]] || local DOCO_COMMAND=$2
-	doco --with-default cmd-default --require-services "$@"
+	[[ ${DOCO_COMMAND-} != cmd ]] || local DOCO_COMMAND
+	[[ ${1-} == [-+1.]* ]] || quantify-services "${1-}" || return
+	local cmds; mdsh-splitwords "${1-}" cmds; cmds+=("${@:2:1}")
+	compose-defaults "${cmds[@]:1}" || true
+	quantify-services "${cmds[0]}" "${cmds[1]-}" "${REPLY[@]}" || return
+	with-targets "${REPLY[@]}" -- doco "${@:2}"
 }
 doco.cp() {
     local opts=() seen=''
@@ -942,7 +946,8 @@ doco.cp() {
             if [[ "${1%%:*}" ]]; then
                 project-name "${1%%:*}"; set -- "$REPLY:${1#*:}" "${@:2}"
             else
-                require-services 1 cp @current shell-default || return
+                compose-defaults cp sh exec || true
+                quantify-services 1 cp "${REPLY[@]}" || return
                 project-name "$REPLY"; set -- "$REPLY$1" "${@:2}"
             fi
         elif [[ $1 != /* && $1 != - ]]; then
@@ -956,7 +961,7 @@ doco.cp() {
 }
 doco.foreach() { foreach-service doco "$@"; }
 doco.jq() { RUN_JQ "$@" <"$DOCO_CONFIG"; }
-doco.sh() { doco --with-default cmd-default exec bash "$@"; }
+doco.sh() { doco exec bash "$@"; }
 DEFINE "${mdsh_raw_jq_api[*]}"
 
 # shellcheck disable=SC2059  # argument is a printf format string

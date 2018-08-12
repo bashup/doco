@@ -7,6 +7,7 @@
   * [Informational Options (--help, --version, etc.)](#informational-options---help---version-etc)
   * [Project Options](#project-options)
 - [Docker-Compose Subcommands](#docker-compose-subcommands)
+  * [Default Targets](#default-targets)
   * [Multi-Service Subcommands](#multi-service-subcommands)
   * [Non-Service Subcommands](#non-service-subcommands)
   * [Single-Service Subcommands](#single-service-subcommands)
