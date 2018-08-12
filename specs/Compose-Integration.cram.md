@@ -17,26 +17,65 @@
 
 ### Docker-Compose Subcommands
 
+#### Default Targets
+
+When a compose command accepts services, the services can come from:
+
+* The `@current` service group
+* A group called `--X-default`, where `X` is `DOCO_COMMAND` or one of the arguments to `compose-defaults`
+* The `--default` group
+
+The `compose-defaults` function, when given the name of the docker-compose command, returns success if at least one of the above groups exists.  `REPLY` is set to an array with the contents of the first such group that exists, or an empty array if none do.
+
+~~~shell
+    $ DOCO_COMMAND=GLOBAL trace any-target compose-defaults C1 C2 C3
+    any-target @current --GLOBAL-default --C1-default --C2-default --C3-default --default
+    [1]
+
+    $ trace any-target compose-defaults LOCAL  # No DOCO_COMMAND
+    any-target @current --LOCAL-default --default
+    [1]
+
+    $ DOCO_COMMAND= trace any-target compose-defaults LOCAL  # Empty DOCO_COMMAND
+    any-target @current --LOCAL-default --default
+    [1]
+
+    $ DOCO_COMMAND=LOCAL trace any-target compose-defaults LOCAL  # Duplicate DOCO_COMMAND
+    any-target @current --LOCAL-default --default
+    [1]
+
+~~~
+
 #### Multi-Service Subcommands
 
 Subcommands that accept multiple services get any services in the current service set appended to the command line.  (The service set is empty by default, causing docker-compose to apply commands to all services by default.)  If any targets have been explicitly specified, there must be at least one service in the current set.
 
 ```shell
-    $ doco foo2
-    'foo2' is not a recognized option, command, service, or group
+# No explicit targets runs command without args
+
+    $ compose-targeted some-command arg1 arg2
+    docker-compose some-command arg1 arg2
+
+# Explicit targets are added to args
+
+    $ with-targets bar -- compose-targeted some-command arg1 arg2
+    docker-compose some-command arg1 arg2 bar
+
+# Explicit empty target produces error
+
+    $ with-targets -- compose-targeted some-command arg1 arg2
+    no services specified for some-command
     [64]
 
-    $ GROUP foo2 :=
-    $ doco foo2 ps
-    no services specified for ps
-    [64]
+# ps, start, stop, etc. are all targeted commands
 
-    $ GROUP foo2 += bar
-    $ doco foo2 ps
+    $ with-targets bar -- trace compose-targeted eval 'doco ps; doco start; doco stop'
+    compose-targeted ps
     docker-compose ps bar
-
-    $ doco foo2 bar
-    bar
+    compose-targeted start
+    docker-compose start bar
+    compose-targeted stop
+    docker-compose stop bar
 ```
 
 #### Non-Service Subcommands
@@ -44,13 +83,12 @@ Subcommands that accept multiple services get any services in the current servic
 But docker-compose subcommands that *don't* take services as their sole positional arguments don't get services appended:
 
 ```shell
-    $ declare -f doco.config | sed 's/ $//'
-    doco.config ()
-    {
-        compose-untargeted config "$@"
-    }
     $ doco config
     docker-compose config
+
+    $ doco x config
+    config cannot target specific services
+    [64]
 ```
 
 #### Single-Service Subcommands
@@ -60,14 +98,19 @@ Commands that take exactly *one* service (exec, run, and port) are modified to o
 Inserting the service argument at the appropriate place requires parsing the command's options, specifically those that take an argument.
 
 ```shell
-    $ doco x port --protocol udp 53
+# Single-service commands look up default targets w/compose-target
+
+    $ trace compose-defaults doco x port --protocol udp 53
+    compose-defaults port
     docker-compose port --protocol udp x 53
 
-    $ doco x y z run -e FOO=bar foo
+    $ trace compose-defaults doco x y z run -e FOO=bar foo
+    compose-defaults run
     run cannot be used on multiple services
     [64]
 
-    $ doco -- exec bash -c 'blah'    # bash is not a service, so this fails
+    $ trace compose-defaults doco -- exec bash -c 'blah'  # bash != service, so this fails
+    compose-defaults exec
     no services specified for exec
     [64]
 

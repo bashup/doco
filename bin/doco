@@ -798,9 +798,13 @@ doco.unpause() { compose-targeted   unpause "$@"; }
 doco.up()      { compose-targeted   up      "$@"; }
 doco.version() { docker-compose     version "$@"; }
 
+compose-defaults() {
+	set -- "${DOCO_COMMAND:-${1-}}" "$@"; [[ $1 && $1 != "${2-}" ]] || shift
+	set -- "${@/#/--}"; any-target @current "${@/%/-default}" --default
+}
 # Commands that accept services
 compose-targeted() {
-	if any-target @current; then
+	if compose-defaults "$1"; then
 		# Non-default target; make sure it's not empty
 		quantify-services + "${DOCO_COMMAND:-$1}" "${REPLY[@]}" || return
     fi
@@ -821,7 +825,7 @@ compose-singular() {
 		argv+=("$1"); if [[ $1 =~ $opts ]]; then shift; argv+=("$1"); fi
     done
 
-	if ! any-target @current; then
+	if ! compose-defaults "$cmd"; then
 		# no current or default target, check command line for one and remove it
 		if is-target-name "${1-}" && target "$1" get exists; then shift; fi
 	fi

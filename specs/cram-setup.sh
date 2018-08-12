@@ -22,3 +22,13 @@ run-doco() (
 	set -e
 	doco "$@"
 )
+
+# Trace execution of a specific function
+trace() {
+	local __trace_ret=0 __trace_old=$(declare -f "$1")
+	eval "${__trace_old/$1/__trace_old_$1}";
+	eval "$1(){ echo $1 \"\$@\"; __trace_old_$1 \"\$@\"; }"
+	"${@:2}" || __trace_ret=$?
+	eval "$__trace_old"
+	return $__trace_ret
+}

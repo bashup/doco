@@ -122,6 +122,23 @@ doco.version() { docker-compose     version "$@"; }
 
 ```
 
+#### Default Targets
+
+When a compose command accepts services, the services can come from:
+
+* The `@current` service group
+* A group called `--X-default`, where `X` is `DOCO_COMMAND` or one of the arguments to `compose-defaults`
+* The `--default` group
+
+The `compose-defaults` function, when given the name of the docker-compose command, returns success if at least one of the above groups exists.  `REPLY` is set to an array with the contents of the first such group that exists, or an empty array if none do.
+
+```shell
+compose-defaults() {
+	set -- "${DOCO_COMMAND:-${1-}}" "$@"; [[ $1 && $1 != "${2-}" ]] || shift
+	set -- "${@/#/--}"; any-target @current "${@/%/-default}" --default
+}
+```
+
 #### Multi-Service Subcommands
 
 Subcommands that accept multiple services get any services in the current service set appended to the command line.  (The service set is empty by default, causing docker-compose to apply commands to all services by default.)  If any targets have been explicitly specified, there must be at least one service in the current set.
@@ -129,7 +146,7 @@ Subcommands that accept multiple services get any services in the current servic
 ```shell
 # Commands that accept services
 compose-targeted() {
-	if any-target @current; then
+	if compose-defaults "$1"; then
 		# Non-default target; make sure it's not empty
 		quantify-services + "${DOCO_COMMAND:-$1}" "${REPLY[@]}" || return
     fi
@@ -166,7 +183,7 @@ compose-singular() {
 		argv+=("$1"); if [[ $1 =~ $opts ]]; then shift; argv+=("$1"); fi
     done
 
-	if ! any-target @current; then
+	if ! compose-defaults "$cmd"; then
 		# no current or default target, check command line for one and remove it
 		if is-target-name "${1-}" && target "$1" get exists; then shift; fi
 	fi
