@@ -714,7 +714,7 @@ quantify-services() {
 	esac
 }
 require-services() {
-	if (($#>2)); then any-target "${@:3}" || true; else target @current get; fi
+	compose-defaults "${@:2}" || true
 	quantify-services "${1-}" "${2-}" "${REPLY[@]}"
 }
 services-matching() {
@@ -848,7 +848,7 @@ compose-singular() {
 		# Treat '--' as end of options
 		if [[ $1 == -- ]]; then shift; break; fi
 		argv+=("$1"); if [[ $1 =~ $opts ]]; then shift; argv+=("$1"); fi
-    done
+	done
 
 	if ! compose-defaults "$cmd"; then
 		# no current or default target, check command line for one and remove it
@@ -942,7 +942,7 @@ function doco.--with-default=() {
 function doco.--require-services=() {
     [[ ${1:0:1} == [-+1.] ]] || loco_error "--require-services argument must begin with ., -, +, or 1"
     mdsh-splitwords "$1"; ((${#REPLY[@]}>1)) || REPLY+=("${DOCO_COMMAND:-${2-}}")
-    require-services "${REPLY[@]:0:2}" && doco "${@:2}"
+    quantify-services "${REPLY[@]:0:2}" "${DOCO_SERVICES[@]}" && doco "${@:2}"
 }
 doco.cmd() {
 	[[ ${DOCO_COMMAND-} != cmd ]] || local DOCO_COMMAND

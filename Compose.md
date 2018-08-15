@@ -182,7 +182,7 @@ compose-singular() {
 		# Treat '--' as end of options
 		if [[ $1 == -- ]]; then shift; break; fi
 		argv+=("$1"); if [[ $1 =~ $opts ]]; then shift; argv+=("$1"); fi
-    done
+	done
 
 	if ! compose-defaults "$cmd"; then
 		# no current or default target, check command line for one and remove it

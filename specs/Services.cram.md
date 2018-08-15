@@ -111,11 +111,9 @@ If the number of services does not match the *quantifier*, failure is returned, 
     success
 ~~~
 
-#### `require-services` *quantifier command-name [targets...]*
+#### `require-services` *quantifier [commands...]*
 
-Like `quantify-services` except that the first existing *target* is checked against *quantifier*.  If no *targets* are given, the `@current` service set is checked.
-
-On success, `${REPLY[@]}` contains the list of services retrieved from the first existing *target*.
+Like `quantify-services` except that it is applied to the current service set, or any default for any *commands*.  On success, `${REPLY[@]}` contains the applicable list of services.
 
 ~~~shell
 # Check current set, default command name, require at least one service
@@ -142,8 +140,8 @@ On success, `${REPLY[@]}` contains the list of services retrieved from the first
 
 # Explicit requirements: first existing group or target is checked and returned
 
-    $ GROUP empty :=
-    $ GROUP xy := x y
+    $ GROUP --empty-default :=
+    $ GROUP --xy-default := x y
 
     $ require-services . test not-real empty xy && declare -p REPLY
     declare -a REPLY=()

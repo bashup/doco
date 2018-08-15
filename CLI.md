@@ -186,7 +186,7 @@ This is the command-line equivalent of calling `require-services` *flag subcomma
 function doco.--require-services=() {
     [[ ${1:0:1} == [-+1.] ]] || loco_error "--require-services argument must begin with ., -, +, or 1"
     mdsh-splitwords "$1"; ((${#REPLY[@]}>1)) || REPLY+=("${DOCO_COMMAND:-${2-}}")
-    require-services "${REPLY[@]:0:2}" && doco "${@:2}"
+    quantify-services "${REPLY[@]:0:2}" "${DOCO_SERVICES[@]}" && doco "${@:2}"
 }
 ```
 

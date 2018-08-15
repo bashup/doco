@@ -62,15 +62,13 @@ quantify-services() {
 }
 ```
 
-#### `require-services` *quantifier command-name [targets...]*
+#### `require-services` *quantifier [commands...]*
 
-Like `quantify-services` except that the first existing *target* is checked against *quantifier*.  If no *targets* are given, the `@current` service set is checked.
-
-On success, `${REPLY[@]}` contains the list of services retrieved from the first existing *target*.
+Like `quantify-services` except that it is applied to the current service set, or any default for any *commands*.  On success, `${REPLY[@]}` contains the applicable list of services.
 
 ```shell
 require-services() {
-	if (($#>2)); then any-target "${@:3}" || true; else target @current get; fi
+	compose-defaults "${@:2}" || true
 	quantify-services "${1-}" "${2-}" "${REPLY[@]}"
 }
 ```
