@@ -621,6 +621,12 @@ doco-target::__create() {
 	event resolve "created $1 $TARGET_NAME" "$TARGET_NAME"
 }
 
+doco-target::jq-name() {
+	# jq function names can only have '_' or '::', not '-' or '.'
+	set -- "${TARGET_NAME//-/::dash::}"; set -- "${1//./::dot::}"; set -- "${1/#::/_::}"
+	REPLY=("${1//::::/::}")
+}
+
 doco-target::get() { REPLY=("${TARGET[@]}"); this "$@"; }
 doco-target::has-count() { this get; eval "(( ${#REPLY[@]} ${1-} ))"; }
 
@@ -644,6 +650,7 @@ doco-target::foreach() {
 @current-target::set() { fail "@current group is read-only"; }
 @current-target::declare-service() { fail "@current is a group, but a service was expected"; }
 @current-target::declare-group() { :; }
+@current-target::jq-name() { fail "@current has no jq name"; }
 
 @current-target::exists() { [[ ${HAVE_SERVICES-} ]]; }
 @current-target::get() {
@@ -734,10 +741,7 @@ generate-jq-func() {
     if [[ $1 != "@current" ]]; then
         target "$1" get; set -- "$1" "${REPLY[@]}"
         local t=; (($#<2)) || { printf -v t '| (.services."%s" |= f ) ' "${@:2}"; t=${t:2}; }
-        # jq function names can only have '_' or '::', not '-' or '.'
-        set -- "${1//-/::dash::}"; set -- "${1//./::dot::}"; set -- "${1/#::/_::}"
-        set -- "${1//::::/::}"
-        DEFINE "def $1(f): ${t:-.};"
+        target "$1" jq-name; DEFINE "def $REPLY(f): ${t:-.};"
     fi
 }
 ALIAS() { mdsh-splitwords "$1"; GROUP "${REPLY[@]}" += "${@:2}"; }

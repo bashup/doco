@@ -131,10 +131,7 @@ generate-jq-func() {
     if [[ $1 != "@current" ]]; then
         target "$1" get; set -- "$1" "${REPLY[@]}"
         local t=; (($#<2)) || { printf -v t '| (.services."%s" |= f ) ' "${@:2}"; t=${t:2}; }
-        # jq function names can only have '_' or '::', not '-' or '.'
-        set -- "${1//-/::dash::}"; set -- "${1//./::dot::}"; set -- "${1/#::/_::}"
-        set -- "${1//::::/::}"
-        DEFINE "def $1(f): ${t:-.};"
+        target "$1" jq-name; DEFINE "def $REPLY(f): ${t:-.};"
     fi
 }
 ```

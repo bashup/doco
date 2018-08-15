@@ -275,8 +275,6 @@ Run *command* zero or more times, once for each service in *target*, with the cu
     declare -ar DOCO_SERVICES=([0]="svc2")
 ~~~
 
-
-
 ### Finding and Merging Targets
 
 The `all-targets` function takes one or more target names, and sets `REPLY` to a unique array of the service names referenced by those targets, returning success unless any of the named targets are invalid or undefined.  (As a special case, `@current` not existing is treated as if it did exist, but was empty.)
@@ -304,5 +302,24 @@ The `any-targets` function takes one or more target names, and sets `REPLY` to t
 
     $ any-target @current aService && echo "${#REPLY[@]} items:" "${REPLY[@]}"
     1 items: aService
+~~~
+
+### jq Names
+
+Sometimes it's useful to define a jq function based on a service or group name.  But jq names don't allow dots or dashes, like docker-compose names do.  So the `jq-name` method returns an escaped form of the target name that can be used as a jq function name:
+
+~~~sh
+    $ target svc2 jq-name && echo "$REPLY"
+    svc2
+
+    $ target --all jq-name && echo "$REPLY"
+    _::dash::dash::all
+
+    $ target foo.bar-baz jq-name && echo "$REPLY"
+    foo::dot::bar::dash::baz
+
+    $ target @current jq-name && echo "$REPLY"
+    @current has no jq name
+    [64]
 ~~~
 

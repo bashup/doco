@@ -66,6 +66,12 @@ doco-target::__create() {
 	event resolve "created $1 $TARGET_NAME" "$TARGET_NAME"
 }
 
+doco-target::jq-name() {
+	# jq function names can only have '_' or '::', not '-' or '.'
+	set -- "${TARGET_NAME//-/::dash::}"; set -- "${1//./::dot::}"; set -- "${1/#::/_::}"
+	REPLY=("${1//::::/::}")
+}
+
 ```
 
 ### Target Contents
@@ -103,6 +109,7 @@ The current target can be set for the duration of a single command/function call
 @current-target::set() { fail "@current group is read-only"; }
 @current-target::declare-service() { fail "@current is a group, but a service was expected"; }
 @current-target::declare-group() { :; }
+@current-target::jq-name() { fail "@current has no jq name"; }
 
 @current-target::exists() { [[ ${HAVE_SERVICES-} ]]; }
 @current-target::get() {
