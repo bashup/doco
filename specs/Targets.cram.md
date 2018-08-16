@@ -192,6 +192,49 @@ Groups can be made read-only; services are always read-only.  Any attempt to cha
     declare -ar __doco_target_aService=([0]="aService")
 ~~~
 
+### Target Environments
+
+Service targets can fetch their environments as an array of `key=val` strings using `get-env`, or run a command with local variables set from them (using `with-env`).  docker-compose's escaping of `$` is handled correctly, as are multi-line values.
+
+~~~sh
+# Only services can get-env
+
+    $ target aGroup get-env
+    aGroup is not a service
+    [64]
+
+    $ target @current get-env
+    @current is not a service
+    [64]
+
+# Environment is loaded from compose-config, so let's mock that and
+# pretend we already have the configuration
+
+    $ compose-config() { echo "calling compose-config"; }
+    $ COMPOSED_JSON='{"services": {"svc2": {"environment": { "X": "y$$z", "Q": "r\ns" }}}}'
+
+# aService has no environment, so we get nothing.
+
+    $ target aService get-env; echo ${#REPLY[@]}
+    calling compose-config
+    0
+    $ target aService get-env; echo ${#REPLY[@]}  # call 2 is cached, so no config fetch
+    0
+
+# svc2 has two variables, one with `$$` and the other with a linefeed
+
+    $ target svc2 get-env; printf '%q\n' "${REPLY[@]}"
+    calling compose-config
+    X=y\$z
+    $'Q=r\ns'
+
+# with-env exposes the variables to the shell
+
+    $ target svc2 with-env declare -p Q
+    declare -- Q="r
+    s"
+~~~
+
 ### The Current Target
 
 A special target `@current` is used to access a special read-only group whose contents are stored in the `DOCO_SERVICES` variable.  It is used to designate what service names will be passed to docker-compose for a given command.

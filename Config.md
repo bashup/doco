@@ -9,6 +9,7 @@
   * [`GROUP` *name(s)... operator target(s)...*](#group-names-operator-targets)
   * [`SERVICES` *name...*](#services-name)
   * [`VERSION` *docker-compose version*](#version-docker-compose-version)
+- [Docker-Compose Configuration](#docker-compose-configuration)
 - [Configuration Files API](#configuration-files-api)
   * [`export-env` *filename*](#export-env-filename)
   * [`export-source` *filename*](#export-source-filename)
@@ -138,6 +139,17 @@ Set the version of the docker-compose configuration (by way of a jq filter):
 
 ```shell
 VERSION() { FILTER ".version=\"$1\""; }
+```
+
+### Docker-Compose Configuration
+
+The JSON form of the docker-compose configuration can be obtained using `compose-config` (with the result in `$COMPOSED_JSON`), so long as the project configuration has been finalized.
+
+```shell
+compose-config() {
+	project-is-finalized || fail "compose configuration isn't finished" || return
+	[[ ${COMPOSED_JSON-} ]] ||	COMPOSED_JSON=$(doco -- config | yaml2json)
+}
 ```
 
 ### Configuration Files API

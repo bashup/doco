@@ -118,3 +118,42 @@ Either way, service targets are created for any services that don't already have
     $ cd ..
 ~~~
 
+### Docker-Compose Configuration
+
+The JSON form of the docker-compose configuration can be obtained using `compose-config` (with the result in `$COMPOSED_JSON`), so long as the project configuration has been finalized.
+
+~~~shell
+# Can't read the config till it's done
+
+    $ compose-config
+    compose configuration isn't finished
+    [64]
+
+# Mock the load
+
+    $ doco.config() { echo "calling doco config" >&2; cat <<'EOF'
+    > services:
+    >   foo: { image: bar/baz }
+    > EOF
+    > }
+    $ DOCO_CONFIG=x.json
+
+# First load calls docker-compose config:
+
+    $ compose-config && { echo "$COMPOSED_JSON" | jq .; }
+    calling doco config
+    {
+      "services": {
+        "foo": {
+          "image": "bar/baz"
+        }
+      }
+    }
+
+# But subsequent loads come from cache
+
+    $ compose-config && { echo "$COMPOSED_JSON" | jq -c .; }
+    {"services":{"foo":{"image":"bar/baz"}}}
+
+~~~
+

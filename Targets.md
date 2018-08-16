@@ -34,9 +34,11 @@ this() {
 A target is a service if it contains exactly one name: its own.  Any other target is a group, provided that the variable actually exists.  Once a target is declared to be one or the other, it can't be redeclared.  Creation events are issued when a target is initially declared.
 
 ```shell
+array-exists() { declare -p "$1" >/dev/null 2>&1; }
+
+doco-target::exists() { [[ ${TARGET+_} ]] || array-exists "$TARGET_VAR"; }
 doco-target::is-service() { [[ ${TARGET[*]-} == "$TARGET_NAME" ]]; }
 doco-target::is-group() { this exists && ! this is-service; }
-doco-target::exists() { [[ ${TARGET+_} ]] || declare -p "$TARGET_VAR" >/dev/null 2>&1; }
 
 doco-target::declare-service() {
 	if ! this exists; then
@@ -64,12 +66,6 @@ doco-target::__create() {
 	TARGET=("${@:2}")
 	event emit    "create $1" "$TARGET_NAME"
 	event resolve "created $1 $TARGET_NAME" "$TARGET_NAME"
-}
-
-doco-target::jq-name() {
-	# jq function names can only have '_' or '::', not '-' or '.'
-	set -- "${TARGET_NAME//-/::dash::}"; set -- "${1//./::dot::}"; set -- "${1/#::/_::}"
-	REPLY=("${1//::::/::}")
 }
 
 ```
@@ -160,5 +156,35 @@ any-target() {
 	REPLY=(); false
 }
 
+```
+
+### Misc. Utilities
+
+```shell
+doco-target::jq-name() {
+	# jq function names can only have '_' or '::', not '-' or '.'
+	set -- "${TARGET_NAME//-/::dash::}"; set -- "${1//./::dot::}"; set -- "${1/#::/_::}"
+	REPLY=("${1//::::/::}")
+}
+
+__get-compose-env() {
+	CLEAR_FILTERS
+	APPLY '.services[$svc].environment // {} | to_entries' svc="$1"
+	FILTER 'map( "\(.key)=\(.value / "$$" | map (. + "$") | add | .[:-1] | @sh)\n" )'
+	FILTER '.+[""] | add | .[:-1]'
+	RUN_JQ -r -j <<<"$COMPOSED_JSON"
+}
+
+doco-target::get-env() {
+	this is-service || fail "$TARGET_NAME is not a service" || return
+	# Fetch parsed env values from docker-compose config
+	local name=${TARGET_VAR}__env; local -n vals=$name
+	if ! array-exists "$name"; then
+		compose-config && eval "vals=($(__get-compose-env "$TARGET_NAME"))" || return
+	fi
+	REPLY=("${vals[@]}")
+}
+
+doco-target::with-env() { this get-env || return; local "${REPLY[@]}"; "$@"; }
 ```
 
