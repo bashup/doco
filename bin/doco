@@ -465,11 +465,11 @@ loco_loadproject() {
         ;;
     esac
 
-    event fire "finalize_project"  # allow overriding the final compose project def
+    event fire "finalize project"  # allow overriding the final compose project def
     RUN_JQ -c -n >"$json"; DOCO_CONFIG=$json; services-matching || return
     DOCO_CONFIG='' GROUP --all := "${REPLY[@]}"   # ensure SERVICES exist for all services
     target --all readonly          # make --all a read-only group
-    event fire "before_commands"   # hook to set up aliases, custom commands, etc.
+    event fire "before commands"   # hook to set up aliases, custom commands, etc.
 }
 
 # Run a command with variants accepted by docker-compose, first checking that
