@@ -99,13 +99,29 @@ Either way, service targets are created for any services that don't already have
     > doco.dump() { echo "${DOCO_SERVICES[@]}"; echo "$FOO"; }
     > event on "finalize project" echo "hi!"
     > event on "before commands" declare -p __doco_target__2d_2dall
+    > include "$TESTDIR/../README.md"
+    > include "dummy.md" test-caching.sh
+    > include "dummy.md"  # multiple includes of same file are a no-op
+    > EOF
+
+    $ cat <<'EOF' >dummy.md
+    > ```shell
+    > echo "dummy loaded"
+    > ```
     > EOF
 
     $ run-doco t dump
+    dummy loaded
     hi!
-    declare -ar __doco_target__2d_2dall=([0]="t")
+    declare -ar __doco_target__2d_2dall=([0]="t" [1]="example1")
     t
     baz'bar
+
+    $ ls .doco-cache/includes  # cached compiled README
+    *%2Fspecs%2F..%2FREADME.md (glob)
+
+    $ cat test-caching.sh
+    echo "dummy loaded"
 
 # doco command(s) can't be run from config:
 

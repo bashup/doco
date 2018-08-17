@@ -52,6 +52,7 @@ Either way, service targets are created for any services that don't already have
 ```shell
 loco_loadproject() {
     cd "$LOCO_ROOT"; [[ ! -f .env ]] || export-env .env
+    mdsh-use-cache "$LOCO_ROOT/.doco-cache/includes"
     export COMPOSE_FILE=$LOCO_ROOT/.doco-cache.json COMPOSE_PATH_SEPARATOR=$'\n'
     local json=$COMPOSE_FILE; DOCO_CONFIG=
 
@@ -191,7 +192,6 @@ Source the mdsh compilation  of the specified markdown file, saving it in *cache
 include() {
     realpath.absolute "$1"
     if [[ ! "${2-}" ]]; then
-        local MDSH_CACHE="$LOCO_ROOT/.doco-cache/includes"
         @require "doco-include:$REPLY" mdsh-run "$1" ""
     else
         __include() { mdsh-make "$1" "$2"; source "$2"; }
