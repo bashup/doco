@@ -9,14 +9,6 @@ The services API depends on the [Targets API](Targets.md) and [bashup/events](ht
 
 ### Automation
 
-#### `foreach-service` *cmd args...*
-
-Invoke *cmd args...* once for each service in the current service set; the service set will contain exactly one service during each invocation.  Does nothing if the current service set is empty.
-
-```shell
-foreach-service() { target @current foreach "$@"; }
-```
-
 #### `have-services` *[compexpr]*
 
 Return true if the current service count matches the bash numeric comparison *compexpr*; if no *compexpr* is supplied, returns true if the current service count is non-zero.
@@ -144,5 +136,6 @@ set-alias() { target "$1" set "$@"; }
 with-alias() { target "$1" call "${@:2}"; }
 with-service() { mdsh-splitwords "$1"; with-targets @current "${REPLY[@]}" -- "${@:2}"; }
 find-services() { services-matching "$@"; }
+foreach-service() { target @current foreach "$@"; }
 ```
 

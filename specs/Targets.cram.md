@@ -314,7 +314,7 @@ Run *command* with a non-existent  `@current` target.
 
 #### `target` *target* `foreach` *command...*
 
-Run *command* zero or more times, once for each service in *target*, with the current target set to the corresponding service.
+Run *command* zero or more times, once for each service in *target*, with the current target set to the corresponding service.  Does nothing if the target is an empty group.
 
 ~~~shell
     $ target @current foreach declare -p DOCO_SERVICES   # no entries; doesn't run

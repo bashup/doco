@@ -14,18 +14,6 @@
 
 ### Automation
 
-#### `foreach-service` *cmd args...*
-
-Invoke *cmd args...* once for each service in the current service set; the service set will contain exactly one service during each invocation.
-
-~~~shell
-    $ SERVICES foo bar
-    $ with-targets foo bar -- foreach-service eval 'echo "${DOCO_SERVICES[@]}"'
-    foo
-    bar
-    $ foreach-service eval 'echo "${DOCO_SERVICES[@]}"'
-~~~
-
 #### `have-services` *[compexpr]*
 
 Return true if the current service count matches the bash numeric comparison *compexpr*; if no *compexpr* is supplied, returns true if the current service count is non-zero.

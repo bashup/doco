@@ -714,7 +714,6 @@ doco-target::get-env() {
 }
 
 doco-target::with-env() { this get-env || return; local "${REPLY[@]}"; "$@"; }
-foreach-service() { target @current foreach "$@"; }
 have-services() { target @current has-count "$@"; }
 project-name() {
     REPLY=${COMPOSE_PROJECT_NAME-}
@@ -771,6 +770,7 @@ set-alias() { target "$1" set "$@"; }
 with-alias() { target "$1" call "${@:2}"; }
 with-service() { mdsh-splitwords "$1"; with-targets @current "${REPLY[@]}" -- "${@:2}"; }
 find-services() { services-matching "$@"; }
+foreach-service() { target @current foreach "$@"; }
 # doco opt OPTION CMD...  --> run CMD with OPTION added to project options
 doco-opt() { local DOCO_OPTS=("${DOCO_OPTS[@]}" "$1"); "${@:2}"; }
 
@@ -1004,7 +1004,7 @@ doco.cp() {
     [[ "$seen" ]] || fail "cp: either source or destination must contain a :" || return
     docker cp ${opts[@]+"${opts[@]}"}
 }
-doco.foreach() { foreach-service doco "$@"; }
+doco.foreach() { target @current foreach doco "$@"; }
 doco.jq() { RUN_JQ "$@" <"$DOCO_CONFIG"; }
 doco.sh() { doco exec bash "$@"; }
 DEFINE "${mdsh_raw_jq_api[*]}"

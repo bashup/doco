@@ -253,7 +253,7 @@ doco.cp() {
 Execute the given `doco` subcommand once for each service in the current service set, with the service set restricted to a single service for each subcommand invocation.  This can be useful for explicit multiple (or zero) execution of a command that is otherwise restricted in how many times it can be executed.
 
 ```shell
-doco.foreach() { foreach-service doco "$@"; }
+doco.foreach() { target @current foreach doco "$@"; }
 ```
 
 #### `jq`
