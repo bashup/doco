@@ -20,7 +20,7 @@ Add *targets* to the named group(s), defining or redefining jq functions to map 
 
 Note that this function recursively expands groups in the target list, but this expansion is *immediate*: redefining a group used in the target list will *not* update the definition of the referencing group.
 
-```shell
+~~~shell
 # Arguments required
 
     $ (GROUP)
@@ -76,7 +76,7 @@ Note that this function recursively expands groups in the target list, but this 
     $ RUN_JQ -c -n '{} | empty::dash::thing(.image="foo")'
     {}
 
-```
+~~~
 
 Also note: services can't be declared once the docker-compose project definition has been finalized, so any targets passed to `GROUP` after the project definition is finalized must be *existing* services or groups.  Otherwise an error will occur:
 
@@ -95,7 +95,7 @@ Declare the named targets to be services and define jq functions for them.  `SER
 
 Note: services can't be declared once the docker-compose project definition has been finalized.
 
-```shell
+~~~shell
 # services or groups as subcommands update the active service set
     $ doco alfa ps
     docker-compose ps alfa
@@ -108,17 +108,17 @@ Note: services can't be declared once the docker-compose project definition has 
     $ SERVICES new-service
     new-service: services must be created before project spec is finalized
     [64]
-```
+~~~
 
 #### `VERSION` *docker-compose version*
 
 Set the version of the docker-compose configuration (by way of a jq filter):
 
-```shell
+~~~shell
     $ VERSION 2.1
     $ echo '{}' | RUN_JQ -c
     {"version":"2.1"}
-```
+~~~
 
 ### Config
 
@@ -128,7 +128,7 @@ Parse a docker-compose format `env_file`, exporting the variables found therein.
 
 Blank and comment lines are ignored, all others are fed to `export` after stripping the leading and trailing spaces.  The file should not use quoting, or shell escaping: the exact contents of a line after the `=` (minus trailing spaces) are used as the variable's contents.
 
-```shell
+~~~shell
     $ export() { printf "export %q\n" "$@"; }   # stub
     $ export-env /dev/stdin <<'EOF'
     > # comment
@@ -142,20 +142,20 @@ Blank and comment lines are ignored, all others are fed to `export` after stripp
     export SOME=thing\ =\ else
     export OTHER
     $ unset -f export   # ditch the stub
-```
+~~~
 
 #### `export-source` *filename*
 
 `source` the specified file, exporting any variables defined by it that didn't previously exist.  (Note: the environment files are in *shell* syntax (bash syntax to be precise), *not* docker-compose syntax.)
 
-```shell
+~~~shell
     $ declare -p FOO 2>/dev/null || echo undefined
     undefined
     $ echo "FOO=bar" >dummy.env
     $ export-source dummy.env
     $ declare -p FOO 2>/dev/null || echo undefined
     declare -x FOO="bar"
-```
+~~~
 
 #### `include` *markdownfile [cachefile]*
 

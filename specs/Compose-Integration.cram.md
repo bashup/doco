@@ -10,10 +10,10 @@
 
 `compose` *args* is short for `docker-compose` *args*, except that the project directory and config files are set to the ones calculated by doco.  The contents of the `DOCO_OPTS` array are included before the supplied arguments:
 
-```shell
+~~~shell
     $ (DOCO_OPTS=(--tls -f foo); compose bar baz)
     docker-compose --tls -f foo bar baz
-```
+~~~
 
 ### Docker-Compose Subcommands
 
@@ -50,7 +50,7 @@ The `compose-defaults` function, when given the name of the docker-compose comma
 
 Subcommands that accept multiple services get any services in the current service set appended to the command line.  (The service set is empty by default, causing docker-compose to apply commands to all services by default.)  If any targets have been explicitly specified, there must be at least one service in the current set.
 
-```shell
+~~~shell
 # No explicit targets runs command without args
 
     $ compose-targeted some-command arg1 arg2
@@ -76,20 +76,20 @@ Subcommands that accept multiple services get any services in the current servic
     docker-compose start bar
     compose-targeted stop
     docker-compose stop bar
-```
+~~~
 
 #### Non-Service Subcommands
 
 But docker-compose subcommands that *don't* take services as their sole positional arguments don't get services appended:
 
-```shell
+~~~shell
     $ doco config
     docker-compose config
 
     $ doco x config
     config cannot target specific services
     [64]
-```
+~~~
 
 #### Single-Service Subcommands
 
@@ -97,7 +97,7 @@ Commands that take exactly *one* service (exec, run, and port) are modified to o
 
 Inserting the service argument at the appropriate place requires parsing the command's options, specifically those that take an argument.
 
-```shell
+~~~shell
 # Single-service commands look up default targets w/compose-target
 
     $ trace compose-defaults doco x port --protocol udp 53
@@ -116,7 +116,7 @@ Inserting the service argument at the appropriate place requires parsing the com
 
     $ doco -- exec foo bash          # foo *is* a service, so this succeeds
     docker-compose exec foo bash
-```
+~~~
 
 ### Docker-Compose Options
 
@@ -126,22 +126,22 @@ Inserting the service argument at the appropriate place requires parsing the com
 
 Most docker-compose global options are simply accumulated and passed through to docker-compose.
 
-```shell
+~~~shell
     $ doco --verbose --tlskey blah ps
     docker-compose --verbose --tlskey=blah ps
-```
+~~~
 
 #### Informational Options (--help, --version, etc.)
 
 Some options pass directly the rest of the command line directly to docker-compose, ignoring any preceding options or prefix options:
 
-```shell
+~~~shell
     $ doco --help --verbose something blah
     docker-compose --help --verbose something blah
 
     $ doco -vh foo
     docker-compose -v -h foo
-```
+~~~
 
 #### Project Options
 
