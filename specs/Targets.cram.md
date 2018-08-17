@@ -194,7 +194,7 @@ Groups can be made read-only; services are always read-only.  Any attempt to cha
 
 ### Target Environments
 
-Service targets can fetch their environments as an array of `key=val` strings using `get-env`, or run a command with local variables set from them (using `with-env`).  docker-compose's escaping of `$` is handled correctly, as are multi-line values.
+Service targets can fetch their environments as an array of `key=val` strings using `get-env`, or run a command with local variables set from them (using `with-env`).  docker-compose's escaping of `$` is handled correctly, as are multi-line values.  (You can also dump them to stdout with `cat-env`.)
 
 ~~~sh
 # Only services can get-env
@@ -210,7 +210,7 @@ Service targets can fetch their environments as an array of `key=val` strings us
 # Environment is loaded from compose-config, so let's mock that and
 # pretend we already have the configuration
 
-    $ compose-config() { echo "calling compose-config"; }
+    $ compose-config() { echo "calling compose-config" >&2; }
     $ COMPOSED_JSON='{"services": {"svc2": {"environment": { "X": "y$$z", "Q": "r\ns" }}}}'
 
 # aService has no environment, so we get nothing.
@@ -222,6 +222,15 @@ Service targets can fetch their environments as an array of `key=val` strings us
     0
 
 # svc2 has two variables, one with `$$` and the other with a linefeed
+
+    $ target svc2 cat-env
+    calling compose-config
+    X='y$z'
+    Q='r
+    s'
+
+# But they are correctly parsed into k=v strings by get-env:
+# (cat-env doesn't cache, so compose-config will be called again)
 
     $ target svc2 get-env; printf '%q\n' "${REPLY[@]}"
     calling compose-config

@@ -167,20 +167,20 @@ doco-target::jq-name() {
 	REPLY=("${1//::::/::}")
 }
 
-__get-compose-env() {
-	CLEAR_FILTERS
-	APPLY '.services[$svc].environment // {} | to_entries' svc="$1"
+doco-target::cat-env() {
+	this is-service || fail "$TARGET_NAME is not a service" || return
+	compose-config || return; CLEAR_FILTERS
+	APPLY '.services[$svc].environment // {} | to_entries' svc="$TARGET_NAME"
 	FILTER 'map( "\(.key)=\(.value / "$$" | map (. + "$") | add | .[:-1] | @sh)\n" )'
 	FILTER '.+[""] | add | .[:-1]'
-	RUN_JQ -r -j <<<"$COMPOSED_JSON"
+	RUN_JQ -r <<<"$COMPOSED_JSON"
 }
 
 doco-target::get-env() {
-	this is-service || fail "$TARGET_NAME is not a service" || return
 	# Fetch parsed env values from docker-compose config
 	local name=${TARGET_VAR}__env; local -n vals=$name
 	if ! array-exists "$name"; then
-		compose-config && eval "vals=($(__get-compose-env "$TARGET_NAME"))" || return
+		REPLY=$(this cat-env) || return; eval "vals=($REPLY)"
 	fi
 	REPLY=("${vals[@]}")
 }
