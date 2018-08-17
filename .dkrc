@@ -3,14 +3,16 @@
 dk use: cram              # run tests using the "cram" functional test tool
 dk use: modd-watch        # watch files and re-run tests or other commands
 dk use: shell-console     # make the "console" command enter a subshell
-dk use: bash32
 dk use: shellcheck
 
 # Define overrides, new commands, functions, etc. here:
 
-for f in bashup.events mdsh jqmd loco realpaths; do
-	require $f basher install bashup/${f#bashup.}
-done
+bashup-require() { for REPLY; do require "$REPLY" basher install bashup/"$REPLY"; done ; }
+
+bashup-require mdsh jqmd loco realpaths
+
+# get the bash 4.4 branch, since doco is 4.4+
+require bashup.events github bashup/events bash44 bashup.events
 
 
 # SC1090 = dynamic 'source' command
