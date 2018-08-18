@@ -6,6 +6,7 @@
   * [The Null Command](#the-null-command)
   * [Options and Arguments](#options-and-arguments)
   * [Subcommands and Targets](#subcommands-and-targets)
+  * [Subcommand Tracking](#subcommand-tracking)
 - [doco options](#doco-options)
   * [`--`](#--)
   * [`--all`](#--all)
@@ -48,7 +49,7 @@ loco_do() {
 
 #### The Null Command
 
-If no arguments are given, `doco` outputs the current target service list, one item per line, and returns success.  If there is no current target, however, a usage message is output:
+If no arguments remain on the command line, `doco` outputs the current target service list, one item per line, and returns success.  However, if there are no arguments *left* because none were ever *given*, a usage message is output:
 
 ```shell
 doco-null() {
@@ -108,7 +109,15 @@ doco-other() {
 	else fail "'$1' is not a recognized option, command, service, or group"
 	fi
 }
+```
 
+#### Subcommand Tracking
+
+As part of subcommand recognition, doco keeps track of the *first* subcommand executed since a change of targets.  This is so that when a subcommand executes other subcommands, doco knows to still [check defaults](Compose.md#default-targets) for the calling command.
+
+For example, since `doco sh` calls `doco exec`, invoking `sh` sets the `DOCO_COMMAND` to `sh`, even when `exec` runs.  (Then, the order of default groups checked is `--sh-default`, `--exec-default`, and finally `--default`).  The `with-command` function handles setting a local value of `DOCO_COMMAND` while running an abritrary command.
+
+```shell
 with-command() { local DOCO_COMMAND=$1; "${@:2}"; }
 ```
 
@@ -268,7 +277,7 @@ doco.jq() { RUN_JQ "$@" <"$DOCO_CONFIG"; }
 
 #### `sh`
 
-`doco sh` *args...* executes `bash` *args* in the specified service's container.  If no service is specified, it defaults to the `cmd-default` target.  Multiple services are not allowed, unless you preface `sh` with `foreach`.
+`doco sh` *args...* executes `bash` *args* in the specified service's container.  Multiple services are not allowed, unless you preface `sh` with `foreach`.
 
 ```shell
 doco.sh() { doco exec bash "$@"; }

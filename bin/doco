@@ -850,7 +850,7 @@ compose-defaults() {
 # Commands that accept services
 compose-targeted() {
 	if compose-defaults "$1"; then
-		# Non-default target; make sure it's not empty
+		# Either an explicit or default target was defined; make sure it's not empty
 		quantify-services + "${DOCO_COMMAND:-$1}" "${REPLY[@]}" || return
 	fi
 	compose "$@" "${REPLY[@]}"
@@ -938,7 +938,6 @@ doco-other() {
 	else fail "'$1' is not a recognized option, command, service, or group"
 	fi
 }
-
 with-command() { local DOCO_COMMAND=$1; "${@:2}"; }
 # Execute the rest of the command line without specified services
 doco.--() { without-targets doco "$@"; }

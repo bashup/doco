@@ -142,13 +142,13 @@ compose-defaults() {
 
 #### Multi-Service Subcommands
 
-Subcommands that accept multiple services get any services in the current service set appended to the command line.  (The service set is empty by default, causing docker-compose to apply commands to all services by default.)  If any targets have been explicitly specified, there must be at least one service in the current set.
+Subcommands that accept multiple services get any services in the current service set appended to the command line.  (The service set is empty by default, causing docker-compose to apply commands to all services by default.)  If any targets have been explicitly specified, or a matching default group exists, there must be at least one service in the set.
 
 ```shell
 # Commands that accept services
 compose-targeted() {
 	if compose-defaults "$1"; then
-		# Non-default target; make sure it's not empty
+		# Either an explicit or default target was defined; make sure it's not empty
 		quantify-services + "${DOCO_COMMAND:-$1}" "${REPLY[@]}" || return
 	fi
 	compose "$@" "${REPLY[@]}"
@@ -169,7 +169,9 @@ compose-untargeted() {
 
 #### Single-Service Subcommands
 
-Commands that take exactly *one* service (exec, run, and port) are modified to optionally accept a service or group alias specified before the command.  When there are no services in the service set, they take an explicit service positionally, just like with docker-compose.  Otherwise, the positional service argument is assumed to be missing, and the current service set is used as the target.  (Which requires that the service set contain exactly one service: no more, no less.)
+Commands that take exactly *one* service (exec, run, and port) are modified to optionally accept a service or group alias specified before the command.  When no services are specified and no matching default group is defined, they take an explicit service positionally, just like with docker-compose.  The positional argument is then checked to make sure it's an actual service.
+
+But if a service is specified or a matching default group is found, the positional service argument is assumed to be missing, and the matching target is used.  (The target must consist of exactly **one** service, however, or an error occurs.  Looping over multiple services or skipping execution altogether requires explicit use of the `foreach` command.)
 
 Inserting the service argument at the appropriate place requires parsing the command's options, specifically those that take an argument.
 

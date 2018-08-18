@@ -48,7 +48,9 @@ The `compose-defaults` function, when given the name of the docker-compose comma
 
 #### Multi-Service Subcommands
 
-Subcommands that accept multiple services get any services in the current service set appended to the command line.  (The service set is empty by default, causing docker-compose to apply commands to all services by default.)  If any targets have been explicitly specified, there must be at least one service in the current set.
+Commands that take exactly *one* service (exec, run, and port) are modified to optionally accept a service or group alias specified before the command.  When no services are specified and no matching default group is defined, they take an explicit service positionally, just like with docker-compose.  The positional argument is then checked to make sure it's an actual service.
+
+But if a service is specified or a matching default group is found, the positional service argument is assumed to be missing, and the matching target is used.  (The target must consist of exactly **one** service, however, or an error occurs.  Looping over multiple services or skipping execution altogether requires explicit use of the `foreach` command.)
 
 ~~~shell
 # No explicit targets runs command without args

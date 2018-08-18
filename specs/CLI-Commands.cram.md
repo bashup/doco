@@ -8,7 +8,7 @@
 
 #### The Null Command
 
-If no arguments are given, `doco` outputs the current target service list, one item per line, and returns success.  If there is no current target, however, a usage message is output:
+If no arguments remain on the command line, `doco` outputs the current target service list, one item per line, and returns success.  However, if there are no arguments *left* because none were ever *given*, a usage message is output:
 
 ~~~shell
     $ doco example1  # explicit services/groups, map to output names
@@ -198,7 +198,7 @@ Any functions defined via jqmd's facilities  (`DEFINES`, `IMPORTS`, `jq defs` bl
 
 #### `sh`
 
-`doco sh` *args...* executes `bash` *args* in the specified service's container.  If no service is specified, it defaults to the `--sh-default` or `--exec-default` targets.  Multiple services are not allowed, unless you preface `sh` with `foreach`.
+`doco sh` *args...* executes `bash` *args* in the specified service's container.  Multiple services are not allowed, unless you preface `sh` with `foreach`.
 
 ~~~shell
     $ doco sh
