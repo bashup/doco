@@ -93,7 +93,7 @@ So each `doco` subcommand invokes `compose-targeted`, `compose-untargeted`, `com
 # All supported docker-compose subcommands should be placed here
 doco.build()   { compose-targeted   build   "$@"; }
 doco.bundle()  { compose-untargeted bundle  "$@"; }
-doco.config()  { compose-untargeted config  "$@"; }
+doco.config()  { tty pager colorize-yaml -- compose-untargeted config  "$@"; }
 doco.create()  { compose-targeted   up --no-start "$@"; }
 doco.down()    { compose-untargeted down    "$@"; }
 doco.events()  { compose-targeted   events  "$@"; }

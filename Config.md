@@ -149,7 +149,7 @@ The JSON form of the docker-compose configuration can be obtained using `compose
 ```shell
 compose-config() {
 	project-is-finalized || fail "compose configuration isn't finished" || return
-	[[ ${COMPOSED_JSON-} ]] ||	COMPOSED_JSON=$(doco -- config | yaml2json)
+	[[ ${COMPOSED_JSON-} ]] ||	COMPOSED_JSON=$(compose config | yaml2json)
 }
 ```
 

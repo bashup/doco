@@ -147,10 +147,14 @@ The JSON form of the docker-compose configuration can be obtained using `compose
 
 # Mock the load
 
-    $ doco.config() { echo "calling doco config" >&2; cat <<'EOF'
+    $ docker-compose() {
+    >     if [[ "$*" == config ]]; then
+    >         echo "calling doco config" >&2; cat <<'EOF'
     > services:
     >   foo: { image: bar/baz }
     > EOF
+    >     else { printf -v REPLY ' %q' "docker-compose" "$@"; echo "${REPLY# }"; } >&2
+    >     fi
     > }
     $ DOCO_CONFIG=x.json
 

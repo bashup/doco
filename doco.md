@@ -21,6 +21,8 @@ The main program begins with a `#!` line and edit warning, followed by its licen
 @require doco/services mdsh-source "$DEVKIT_ROOT/Services.md"
 @require doco/compose  mdsh-source "$DEVKIT_ROOT/Compose.md"
 @require doco/cli      mdsh-source "$DEVKIT_ROOT/CLI.md"
+
+@require .devkit/tty   cat "$DEVKIT_HOME/modules/tty" <(echo "tty_prefix=DOCO_")
 ```
 
 ## Merging jqmd and loco
