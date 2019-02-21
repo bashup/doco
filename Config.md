@@ -194,7 +194,7 @@ include() {
     if [[ ! "${2-}" ]]; then
         @require "doco-include:$REPLY" mdsh-run "$1" ""
     else
-        __include() { mdsh-make "$1" "$2"; source "$2"; }
+        __include() { mdsh-make "$1" "$2"; mdsh-ok && source "$2"; }
         @require "doco-include:$REPLY" __include "$@"
     fi
 }
