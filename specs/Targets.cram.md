@@ -211,7 +211,7 @@ Service targets can fetch their environments as an array of `key=val` strings us
 # pretend we already have the configuration
 
     $ compose-config() { echo "calling compose-config" >&2; }
-    $ COMPOSED_JSON='{"services": {"svc2": {"environment": { "X": "y$$z", "Q": "r\ns" }}}}'
+    $ COMPOSED_JSON='{"services": {"svc2": {"environment": { "X": "y$$z", "Z": null, "Q": "r\ns"}}}}'
 
 # aService has no environment, so we get nothing.
 

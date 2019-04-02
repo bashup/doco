@@ -718,8 +718,8 @@ doco-target::cat-env() {
 	this is-service || fail "$TARGET_NAME is not a service" || return
 	compose-config || return; CLEAR_FILTERS
 	APPLY '.services[$svc].environment // {} | to_entries' svc="$TARGET_NAME"
-	FILTER 'map( "\(.key)=\(.value / "$$" | map (. + "$") | add | .[:-1] | @sh)\n" )'
-	FILTER '.+[""] | add | .[:-1]'
+	FILTER '.[]|select(.value)|"\(.key)=\(.value/"$$"| map(. + "$") | add | .[:-1] | @sh)\n"'
+	FILTER '[.,""] | add | .[:-1]'
 	RUN_JQ -r <<<"$COMPOSED_JSON"
 }
 
