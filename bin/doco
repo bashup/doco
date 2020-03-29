@@ -735,6 +735,13 @@ doco-target::get-env() {
 doco-target::with-env() { this get-env || return; local "${REPLY[@]}"; "$@"; }
 have-services() { target @current has-count "$@"; }
 project-name() {
+    if (($#)); then
+        REPLY=$(
+            CLEAR_FILTERS; FILTER 'services[%s].container_name//""' "$1"
+            RUN_JQ -r <"$DOCO_CONFIG"
+        )
+        [[ ! $REPLY ]] || return 0
+    fi
     REPLY=${COMPOSE_PROJECT_NAME-}
     [[ $REPLY ]] || realpath.basename "$LOCO_ROOT"   # default to directory name
     REPLY=${REPLY//[^[:alnum:]]/}; REPLY=${REPLY,,}  # lowercase and remove non-alphanumerics

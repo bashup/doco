@@ -19,12 +19,19 @@ have-services() { target @current has-count "$@"; }
 
 #### `project-name` *[service index]*
 
-Returns the project name or container name of the specified service in `REPLY`.  The project name is derived from  `$COMPOSE_PROJECT_NAME` (or the project directory name if not set).  If no *index* is given, it defaults to `1`.  (e.g. `project_service_1`).
+Returns the the container name of the specified *service* (in `$REPLY`), or the name of the docker-composer project if no *service* is given.  If a *service* is given, its configuration is checked for a custom `container_name`, and it's returned if present.  Otherwise, the returned name is constructed from the project name plus the service name and the *index* (or `1` if no index is given).  So if the project name is `foo`, the service is `bar`, and the index is 3, the return value is `foo_bar_3`.
 
-(Note: custom container names are **not** supported.)
+The project name is derived from  `$COMPOSE_PROJECT_NAME` (or the project directory name if not set).
 
 ```shell
 project-name() {
+    if (($#)); then
+        REPLY=$(
+            CLEAR_FILTERS; FILTER 'services[%s].container_name//""' "$1"
+            RUN_JQ -r <"$DOCO_CONFIG"
+        )
+        [[ ! $REPLY ]] || return 0
+    fi
     REPLY=${COMPOSE_PROJECT_NAME-}
     [[ $REPLY ]] || realpath.basename "$LOCO_ROOT"   # default to directory name
     REPLY=${REPLY//[^[:alnum:]]/}; REPLY=${REPLY,,}  # lowercase and remove non-alphanumerics

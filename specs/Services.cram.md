@@ -30,15 +30,20 @@ Return true if the current service count matches the bash numeric comparison *co
 
 #### `project-name` *[service index]*
 
-Returns the project name or container name of the specified service in `REPLY`.  The project name is derived from  `$COMPOSE_PROJECT_NAME` (or the project directory name if not set).  If no *index* is given, it defaults to `1`.  (e.g. `project_service_1`).
+Returns the the container name of the specified *service* (in `$REPLY`), or the name of the docker-composer project if no *service* is given.  If a *service* is given, its configuration is checked for a custom `container_name`, and it's returned if present.  Otherwise, the returned name is constructed from the project name plus the service name and the *index* (or `1` if no index is given).  So if the project name is `foo`, the service is `bar`, and the index is 3, the return value is `foo_bar_3`.
 
-(Note: custom container names are **not** supported.)
+The project name is derived from  `$COMPOSE_PROJECT_NAME` (or the project directory name if not set).
 
 ~~~shell
     $ project-name; echo $REPLY
     servicescrammd
+
     $ COMPOSE_PROJECT_NAME=foo project-name bar 3; echo $REPLY
     foo_bar_3
+
+    $ echo '{"version":"2.1","services":{"foo":{"container_name":"baz"}}}' >cfg.tmp
+    $ DOCO_CONFIG=cfg.tmp project-name foo 7 && echo $REPLY
+    baz
 ~~~
 
 #### `quantify-services` *quantifier command-name [services...]*
