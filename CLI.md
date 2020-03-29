@@ -23,6 +23,7 @@
   * [`jq`](#jq)
   * [`jqc`](#jqc)
   * [`sh`](#sh)
+  * [`tag` *[tag]*](#tag-tag)
 
 <!-- tocstop -->
 
@@ -299,5 +300,33 @@ doco.jqc() { compose-config; local JQ_CMD=(jq-tty); RUN_JQ "$@" <<<"$COMPOSED_JS
 
 ```shell
 doco.sh() { doco exec bash "$@"; }
+```
+
+#### `tag` *[tag]*
+
+Tag the current service's `image` with *tag*.  If no *tag* is given, outputs the service's `image`.
+
+If *tag* contains a `:`, it is passed to the `docker tag` command as-is.  Otherwise, if it contains a `/`, `:latest` will be added to the end of it.  If it contains neither a `:` nor a `/`, it is appended to the base image with a `:`.
+
+That is, if a service `foo` has an `image` of `foo/bar:1.2` then:
+
+* `doco foo tag bar/baz:bing` will tag the image as `bar/baz:bing`
+* `doco foo tag bar/baz` will tag the image as `bar/baz:latest`
+* `doco foo tag latest` will tag the image as `foo/bar:latest`
+* `doco foo tag baz` will tag the image as `foo/bar:baz`
+
+Exactly one service must be selected, either explicitly or via the `--tag-default` or`--default` targets.  The service must have an `image` key, or the command will fail.
+
+```shell
+doco.tag() {
+    require-services 1 tag || return
+    REPLY="$(CLEAR_FILTERS; FILTER 'services[%s].image' "$REPLY"; RUN_JQ -r <"$DOCO_CONFIG")"
+    case ${1-} in
+    ?*:*) docker tag "$REPLY" "$1" ;;
+    */*)  docker tag "$REPLY" "$1:latest" ;;
+    '')   echo "$REPLY" ;;
+    *)    docker tag "$REPLY" "${REPLY%:*}:$1";;
+    esac
+}
 ```
 

@@ -1033,6 +1033,16 @@ doco.foreach() { target @current foreach doco "$@"; }
 doco.jq() { local JQ_CMD=(jq-tty); RUN_JQ "$@" <"$DOCO_CONFIG"; }
 doco.jqc() { compose-config; local JQ_CMD=(jq-tty); RUN_JQ "$@" <<<"$COMPOSED_JSON"; }
 doco.sh() { doco exec bash "$@"; }
+doco.tag() {
+    require-services 1 tag || return
+    REPLY="$(CLEAR_FILTERS; FILTER 'services[%s].image' "$REPLY"; RUN_JQ -r <"$DOCO_CONFIG")"
+    case ${1-} in
+    ?*:*) docker tag "$REPLY" "$1" ;;
+    */*)  docker tag "$REPLY" "$1:latest" ;;
+    '')   echo "$REPLY" ;;
+    *)    docker tag "$REPLY" "${REPLY%:*}:$1";;
+    esac
+}
 #!/usr/bin/env bash
 
 jq-tty() { if isatty; then tty pager -- command jq  -C "$@"; else command jq "$@"; fi; }

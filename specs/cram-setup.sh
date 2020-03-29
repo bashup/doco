@@ -9,7 +9,7 @@ loco_site_config() { :;}
 doco.--dry-run
 
 # default empty compose file
-echo '{"version": "2.1", "services": {"example1":{}}}' >docker-compose.yml
+echo '{"version": "2.1", "services": {"example1":{"image":"bash"}}}' >docker-compose.yml
 
 # Initialize doco in-process when run without other initialization
 doco() { unset -f doco; loco_main "$@"; }
