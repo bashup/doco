@@ -238,11 +238,11 @@ If stdout is a TTY, the output is paged (using `$DOCO_PAGER` or `less -FRX`) and
     [64]
 ~~~
 
-#### `tag` *[tag]*
+#### `tag` *[tags...]*
 
-Tag the current service's `image` with *tag*.  If no *tag* is given, outputs the service's `image`.
+Tag the current service's `image` with *tags*.  If no *tags* are given, outputs the service's `image`.
 
-If *tag* contains a `:`, it is passed to the `docker tag` command as-is.  Otherwise, if it contains a `/`, `:latest` will be added to the end of it.  If it contains neither a `:` nor a `/`, it is appended to the base image with a `:`.
+If a *tag* contains a `:`, it is passed to the `docker tag` command as-is.  Otherwise, if it contains a `/`, `:latest` will be added to the end of it.  If it contains neither a `:` nor a `/`, it is appended to the base image with a `:`.
 
 That is, if a service `foo` has an `image` of `foo/bar:1.2` then:
 
@@ -253,16 +253,17 @@ That is, if a service `foo` has an `image` of `foo/bar:1.2` then:
 
 Exactly one service must be selected, either explicitly or via the `--tag-default` or `--default` targets.  The service must have an `image` key, or the command will fail.
 
+(Note: this command tags the image specified by the service's `image` setting, *not* the image currently in use by the service.  If the `image` changed (or there's a newer image with that tag) since the last service `up`, you may be tagging the wrong image.)
+
 ~~~sh
     $ doco example1 tag
     bash
 
-    $ doco example1 tag bing/bang:boom
+    $ doco example1 tag zing bing/bang:boom
+    docker tag bash bash:zing
     docker tag bash bing/bang:boom
 
-    $ doco example1 tag bing/bang
+    $ doco example1 tag bing/bang boom
     docker tag bash bing/bang:latest
-
-    $ doco example1 tag boom
     docker tag bash bash:boom
 ~~~

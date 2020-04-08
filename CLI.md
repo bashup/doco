@@ -23,7 +23,7 @@
   * [`jq`](#jq)
   * [`jqc`](#jqc)
   * [`sh`](#sh)
-  * [`tag` *[tag]*](#tag-tag)
+  * [`tag` *[tags...]*](#tag-tags)
 
 <!-- tocstop -->
 
@@ -302,11 +302,11 @@ doco.jqc() { compose-config; local JQ_CMD=(jq-tty); RUN_JQ "$@" <<<"$COMPOSED_JS
 doco.sh() { doco exec bash "$@"; }
 ```
 
-#### `tag` *[tag]*
+#### `tag` *[tags...]*
 
-Tag the current service's `image` with *tag*.  If no *tag* is given, outputs the service's `image`.
+Tag the current service's `image` with *tags*.  If no *tags* are given, outputs the service's `image`.
 
-If *tag* contains a `:`, it is passed to the `docker tag` command as-is.  Otherwise, if it contains a `/`, `:latest` will be added to the end of it.  If it contains neither a `:` nor a `/`, it is appended to the base image with a `:`.
+If a *tag* contains a `:`, it is passed to the `docker tag` command as-is.  Otherwise, if it contains a `/`, `:latest` will be added to the end of it.  If it contains neither a `:` nor a `/`, it is appended to the base image with a `:`.
 
 That is, if a service `foo` has an `image` of `foo/bar:1.2` then:
 
@@ -317,16 +317,20 @@ That is, if a service `foo` has an `image` of `foo/bar:1.2` then:
 
 Exactly one service must be selected, either explicitly or via the `--tag-default` or`--default` targets.  The service must have an `image` key, or the command will fail.
 
+(Note: this command tags the image specified by the service's `image` setting, *not* the image currently in use by the service.  If the `image` changed (or there's a newer image with that tag) since the last service `up`, you may be tagging the wrong image.)
+
 ```shell
 doco.tag() {
     require-services 1 tag || return
-    REPLY="$(CLEAR_FILTERS; FILTER 'services[%s].image' "$REPLY"; RUN_JQ -r <"$DOCO_CONFIG")"
-    case ${1-} in
-    ?*:*) docker tag "$REPLY" "$1" ;;
-    */*)  docker tag "$REPLY" "$1:latest" ;;
-    '')   echo "$REPLY" ;;
-    *)    docker tag "$REPLY" "${REPLY%:*}:$1";;
-    esac
+    set -- "$(CLEAR_FILTERS; FILTER 'services[%s].image' "$REPLY"; RUN_JQ -r <"$DOCO_CONFIG")" "$@"
+    (($#>1))||{ echo "$1"; return; }
+    for REPLY in "${@:2}"; do
+        case $REPLY in
+        ?*:*) docker tag "$1" "$REPLY" ;;
+        */*)  docker tag "$1" "$REPLY:latest" ;;
+        *)    docker tag "$1" "${1%:*}:$REPLY";;
+        esac
+    done
 }
 ```
 

@@ -1035,13 +1035,15 @@ doco.jqc() { compose-config; local JQ_CMD=(jq-tty); RUN_JQ "$@" <<<"$COMPOSED_JS
 doco.sh() { doco exec bash "$@"; }
 doco.tag() {
     require-services 1 tag || return
-    REPLY="$(CLEAR_FILTERS; FILTER 'services[%s].image' "$REPLY"; RUN_JQ -r <"$DOCO_CONFIG")"
-    case ${1-} in
-    ?*:*) docker tag "$REPLY" "$1" ;;
-    */*)  docker tag "$REPLY" "$1:latest" ;;
-    '')   echo "$REPLY" ;;
-    *)    docker tag "$REPLY" "${REPLY%:*}:$1";;
-    esac
+    set -- "$(CLEAR_FILTERS; FILTER 'services[%s].image' "$REPLY"; RUN_JQ -r <"$DOCO_CONFIG")" "$@"
+    (($#>1))||{ echo "$1"; return; }
+    for REPLY in "${@:2}"; do
+        case $REPLY in
+        ?*:*) docker tag "$1" "$REPLY" ;;
+        */*)  docker tag "$1" "$REPLY:latest" ;;
+        *)    docker tag "$1" "${1%:*}:$REPLY";;
+        esac
+    done
 }
 #!/usr/bin/env bash
 
