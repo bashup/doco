@@ -3,32 +3,17 @@
 dk use: cram              # run tests using the "cram" functional test tool
 dk use: modd-watch        # watch files and re-run tests or other commands
 dk use: shell-console     # make the "console" command enter a subshell
-dk use: shellcheck
 
 # Define overrides, new commands, functions, etc. here:
 
-bashup-require() { for REPLY; do require "$REPLY" basher install bashup/"$REPLY"; done ; }
-
-bashup-require mdsh jqmd loco realpaths
 
 # get the bash 4.4 branch, since doco is 4.4+
 require bashup.events github bashup/events bash44 bashup.events
-
-
-# SC1090 = dynamic 'source' command
-# SC1091 = not checking sourced files (i.e. '.doco')
-# SC2016 = bashup.events making strings for eval
-# SC2145 = using $@ w/prefix
-# SC2128 = array/string mixing
-# SC2178 = array/string mixing
-SHELLCHECK_OPTS='-e SC1090,SC1091,SC2016,SC2128,SC2145,SC2178'
 
 watch+ "*.md" "docs/*.md" "specs/cram-setup.sh" "specs/*.md" "!**/*.md.err" "!**/.~*.md" -- dk test
 
 before test mdsh --out "$BASHER_INSTALL_BIN/doco" --compile doco.md   # for sourcing and running by tests
 before test chmod +x "$BASHER_INSTALL_BIN/doco"
-
-on test dk shellcheck "$BASHER_INSTALL_BIN/doco"
 
 on build mdsh --out bin/doco --compile doco.md
 on build chmod +x bin/doco

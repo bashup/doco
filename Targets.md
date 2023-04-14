@@ -5,13 +5,15 @@ Targets are implemented as array variables named in the form `__doco_target_X`, 
 ```shell
 is-target-name() { [[ $1 && $1 != *[^-._A-Za-z0-9]* ]]; }
 
+c3::resolve doco-target
+c3::resolve @current-target doco-target
 target() {
-	local TARGET_NAME="$1" __mro__=(doco-target)
+	local TARGET_NAME="$1" __class__=doco-target
 	if is-target-name "$1"; then
 		local t=${1//_/_5f}; t=${t//./_2e}; t=${t//-/_2d}
 		local TARGET_VAR=__doco_target_$t
 	elif [[ $1 == @current ]]; then
-		local TARGET_VAR=DOCO_SERVICES __mro__=(@current-target doco-target)
+		local TARGET_VAR=DOCO_SERVICES __class__=@current-target
 	else fail "Group or service name '$1' contains invalid characters" || return
 	fi
 	local -n TARGET="$TARGET_VAR"
@@ -20,13 +22,7 @@ target() {
 }
 
 fail() { echo "$1">&2; return "${2-64}"; }
-this() {
-	if (($#)); then
-		local m; for m in "${__mro__[@]}"; do if fn-exists "$m::$1"; then break; fi; done
-		"$m::$@"
-	fi
-}
-
+this() { ${1:+c3::call "${c3_mro["$__class__"]}" "$@"};}
 ```
 
 ### Target Types

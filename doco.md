@@ -16,6 +16,7 @@ The main program begins with a `#!` line and edit warning, followed by its licen
 
 @require bashup/jqmd   mdsh-source "$BASHER_PACKAGES_PATH/bashup/jqmd/jqmd.md"
 @require bashup/loco   mdsh-source "$BASHER_PACKAGES_PATH/bashup/loco/loco.md"
+@require bashup/c3-mro mdsh-source "$BASHER_PACKAGES_PATH/bashup/c3-mro/c3-mro.md"
 
 @require doco/config   mdsh-source "$DEVKIT_ROOT/Config.md"
 @require doco/services mdsh-source "$DEVKIT_ROOT/Services.md"
