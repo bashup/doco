@@ -7,9 +7,6 @@ dk use: shell-console     # make the "console" command enter a subshell
 # Define overrides, new commands, functions, etc. here:
 
 
-# get the bash 4.4 branch, since doco is 4.4+
-require bashup.events github bashup/events bash44 bashup.events
-
 watch+ "*.md" "docs/*.md" "specs/cram-setup.sh" "specs/*.md" "!**/*.md.err" "!**/.~*.md" -- dk test
 
 before test mdsh --out "$BASHER_INSTALL_BIN/doco" --compile doco.md   # for sourcing and running by tests
