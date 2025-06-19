@@ -519,7 +519,7 @@ loco_preconfig() {
     set -- "${BASH_VERSINFO[@]}"
     (( $1 > 4 || $1 == 4 && $2 >= 4 )) || mdsh-error "Sorry; doco requires bash 4.4 or better"
     export COMPOSE_PROJECT_NAME=
-    LOCO_FILE=("?*[-.]doco.md" ".doco" "docker-compose.yml")
+    LOCO_FILE=("?*[-.]doco.md" ".doco" "docker-compose.yml" "docker-compose.yaml")
     LOCO_NAME=doco
     LOCO_USER_CONFIG=$HOME/.config/doco
     LOCO_SITE_CONFIG=/etc/doco/config

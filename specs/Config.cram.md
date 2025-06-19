@@ -7,11 +7,11 @@
 
 ### File and Function Names
 
-Configuration is loaded using loco.  Specifically, by searching for `*.doco.md`, `.doco`, or `docker-compose.yml` above the current directory.  The loco script name is hardcoded to `doco`, so even if it's run via a symlink the function names for custom subcommands will still be `doco.subcommand-name`.  User and site-level configs are also defined.
+Configuration is loaded using loco.  Specifically, by searching for `*.doco.md`, `.doco`, or `docker-compose.y{a,}ml` above the current directory.  The loco script name is hardcoded to `doco`, so even if it's run via a symlink the function names for custom subcommands will still be `doco.subcommand-name`.  User and site-level configs are also defined.
 
 ~~~shell
     $ run-doco declare LOCO_FILE LOCO_NAME LOCO_USER_CONFIG LOCO_SITE_CONFIG
-    declare -a LOCO_FILE=([0]="?*[-.]doco.md" [1]=".doco" [2]="docker-compose.yml")
+    declare -a LOCO_FILE=([0]="?*[-.]doco.md" [1]=".doco" [2]="docker-compose.yml" [3]="docker-compose.yaml")
     declare -- LOCO_NAME="doco"
     declare -- LOCO_USER_CONFIG="/*/.config/doco" (glob)
     declare -- LOCO_SITE_CONFIG="/etc/doco/config"
